@@ -425,6 +425,9 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
         print(out.fit_report(min_correl=0.25))
         axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
+        comps = out.eval_components(x=subCoords['x'])
+        for _, component in comps.items():
+            axs[1].plot(subCoords['x'], np.log(component), 'g--')
         for key, value in out.best_values.items():
             if 'center' in key:
                 centerTwoThetaList.append(value)
@@ -455,6 +458,7 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         if abs(centerTwoTheta-literatureSubstrateTwoTheta) > 0.05:  # Don't draw one for the substrate
             _, centerIndex = closestNumAndIndex(xrayData.twoTheta, centerTwoTheta + twoThetaOffset)
             backgroundIntensity = xrayData.background[centerIndex]
+            # TODO: The arrows are a bit offset from the data now for some reason when doing the MultiFit Area, make sure the components can't be negative?
             an0 = axs[0].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, np.log(intensity) + backgroundIntensity), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
             an0.draggable()
             an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, np.log(intensity)), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
