@@ -257,6 +257,9 @@ def backgroundSubtractionPlotting(xrayData: XrayData, rollingBall: RollingBall):
 
 
 def fittingRegionSelectionPlotting(xrayData: XrayData):
+    # Each "region" limits the peak center position
+    # Each MultiFit Area uses all the data in the selected area and tries to fit the regions within to the whole data,
+    # Except the peak center of each region in the MultiFit area is limited to its selected region
     fig, ax = plt.subplots(figsize=(10, 8))
     fig.canvas.set_window_title(xrayData.nakedFileName + '_PeakFitting')
     plt.subplots_adjust(bottom=0.2)
@@ -329,50 +332,77 @@ def fittingRegionSelectionPlotting(xrayData: XrayData):
     plt.show(block=True)
     plt.close()
     assert len(coordsList) > 0, "There are no selected ranges in the coordsList"
+    # TODO: Need as assertion that the MultiFit Area's don't overlap!
     return coordsList, multiRegionCoordsList
 
 
-def prepareFittingModels(roiCoordsList, multiRegionCoordsList):
-
+def prepareFittingModels(roiCoordsList):
     modelList = []
     paramList = []
-    for entry, entryNum in zip(roiCoordsList, list(range(1, len(roiCoordsList) + 1))):
-        prefixName = 'v' + str(entryNum) + '_'
-        # pull info out of roiCoordsList dict
-        selectedXVals = entry['x']
-        selectedYVals = np.exp(entry['y'])
-        # mod = PseudoVoigtModel(prefix=prefixName))
-        mod = VoigtModel(prefix=prefixName)
-        modelList.append(mod)
-        pars = mod.guess(selectedYVals, x=selectedXVals, negative=False)
-        pars[prefixName+'center'].set(min=min(selectedXVals), max=max(selectedXVals))
-        pars[prefixName + 'amplitude'].set(min=0)
-        pars[prefixName + 'sigma'].set(min=0)
-        pars[prefixName + 'gamma'].set(value=0.3, vary=True, expr='', min=0)
-        paramList.append(pars)
+    index = 1
+    for region in roiCoordsList:
+        individualModelsList = []
+        individualParamsList = []
+        if isinstance(region, dict):
+            # If the region is just a single region, make it a list so the for loops pulls a dict rather than a dict entry
+            region = [region]
+        for entry in region:
+            prefixName = 'v' + str(index) + '_'
+            index += 1
+            # pull info out of region dict
+            selectedXVals = entry['x']
+            selectedYVals = np.exp(entry['y'])
+            # mod = PseudoVoigtModel(prefix=prefixName))
+            mod = VoigtModel(prefix=prefixName)
+            individualModelsList.append(mod)
+            pars = mod.guess(selectedYVals, x=selectedXVals, negative=False)
+            pars[prefixName+'center'].set(min=min(selectedXVals), max=max(selectedXVals))
+            pars[prefixName + 'amplitude'].set(min=0)
+            pars[prefixName + 'sigma'].set(min=0)
+            pars[prefixName + 'gamma'].set(value=0.3, vary=True, expr='', min=0)
+            individualParamsList.append(pars)
+        combinedModel = individualModelsList[0]
+        combinedParams = individualParamsList[0]
+        if len(individualModelsList) > 1:
+            for model, params in zip(individualModelsList[1:], individualParamsList[1:]):
+                combinedModel += model
+                combinedParams += params
+        modelList.append(combinedModel)
+        paramList.append(combinedParams)
     return modelList, paramList
 
 
-def splitMultiFitModels(roiCoordsList, multiRegionCoordsList: list[dict]):
+def splitMultiFitModels(roiCoordsList, multiRegionCoordsList):
     combinedModelsList = []  # Each element of this list should be 1 combined model, each element is a list, if len == 1 then it's fit independently
+    coordsList = []  # Defines the area to fit each element of combinedModelsList, see fittingRegionSelectionPlotting for more info
     if multiRegionCoordsList:
         for multiRegion in multiRegionCoordsList:
             multiRegionXValsSet = set(multiRegion['x'])
             combinedRegionList = []
-            for roiIndex in range(len(roiCoordsList)):
+            indicesToDelete = []
+            for roiIndex, roi in enumerate(roiCoordsList):
                 if not multiRegionXValsSet.isdisjoint(roiCoordsList[roiIndex]['x']):
                     # There is at least 1 element in common between the roi and multiregion
-                    combinedRegionList.append(roiCoordsList.pop(roiIndex))
+                    combinedRegionList.append(roi)
+                    indicesToDelete.append(roiIndex)
+
             assert combinedRegionList, "There were no detected regions in the MultiFit Area"
             combinedModelsList.append(combinedRegionList)
+            coordsList.append(multiRegion)
+            # Be careful not to mess up indices of list while trying to delete based on index!
+            for index in sorted(indicesToDelete, reverse=True):
+                del(roiCoordsList[index])
         combinedModelsList.extend(roiCoordsList)  # After removing any entries in a MultiFit Area, add the rest of them onto the model list
+        coordsList.extend(roiCoordsList)
     else:
         combinedModelsList = roiCoordsList
-    return prepareFittingModels(combinedModelsList)
+        coordsList = roiCoordsList
+    return prepareFittingModels(combinedModelsList), coordsList
 
 
 def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegionCoordsList: list):
-    modelList, paramList = prepareFittingModels(roiCoordsList, multiRegionCoordsList)
+    print('in snContentFittingPlotting')
+    (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     axs[0].set_xlabel('$2\\theta$')
     axs[0].set_ylabel('ln(Intensity)')
@@ -390,34 +420,17 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
 
     centerTwoThetaList = []
     heightList = []
-    if multiRegionCoordsList:
-        combinedModel = modelList[0]
-        combinedParams = paramList[0]
-        if len(modelList) > 1:
-            for model, params in zip(modelList[1:], paramList[1:]):
-                combinedModel += model
-                combinedParams += params
-        out = combinedModel.fit(xrayData.expBgSubIntensity, combinedParams, x=xrayData.twoTheta)
+    for model, params, subCoords in zip(modelList, paramList, fittingCoordsList):
+        out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
+        print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
         print(out.fit_report(min_correl=0.25))
-        axs[1].plot(xrayData.twoTheta, np.log(out.best_fit), 'r--')
+        axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
         for key, value in out.best_values.items():
             if 'center' in key:
                 centerTwoThetaList.append(value)
         for key in out.params.keys():
             if 'height' in key:
                 heightList.append(out.params[key].value)
-    else:
-        for model, params, subCoords in zip(modelList, paramList, roiCoordsList):
-            out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
-            print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
-            print(out.fit_report(min_correl=0.25))
-            axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
-            for key, value in out.best_values.items():
-                if 'center' in key:
-                    centerTwoThetaList.append(value)
-            for key in out.params.keys():
-                if 'height' in key:
-                    heightList.append(out.params[key].value)
     plt.show(block=False)
 
     proposedUserSubstrateTwoTheta = centerTwoThetaList[heightList.index(max(heightList))]
