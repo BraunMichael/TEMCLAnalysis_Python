@@ -292,6 +292,7 @@ def fittingRegionSelectionPlotting(xrayData: XrayData):
     plt.show(block=False)
     rangeselect = RangeSelect()
     coordsList = []
+    multiRegionCoordsList = []
 
     class Index(object):
         index = 1
@@ -305,17 +306,30 @@ def fittingRegionSelectionPlotting(xrayData: XrayData):
                                 rectprops=dict(alpha=0.3, facecolor='red'))
             plt.draw()
 
+        def addMultiFitRegion(self, event):
+            self.index += 1
+            numRanges = self.index
+            multiRegionCoordsList.append(rangeselect.coords.copy())
+            ax.patches[-1].set_facecolor('blue')
+            ax.patches[-1].set_alpha(0.2)
+            span = SpanSelector(ax, rangeselect, 'horizontal', useblit=False,
+                                rectprops=dict(alpha=0.3, facecolor='red'))
+            plt.draw()
+
     callback = Index()
     axAddRegion = plt.axes([0.7, 0.05, 0.2, 0.075])
     bAdd = Button(axAddRegion, 'Add Region')
+    axAddRegion = plt.axes([0.45, 0.05, 0.2, 0.075])
+    bMulti = Button(axAddRegion, 'MultiFit Area')
     numRanges = 1
     span = SpanSelector(ax, rangeselect, 'horizontal', useblit=False, rectprops=dict(alpha=0.3, facecolor='red'))
     bAdd.on_clicked(callback.addRegion)
+    bMulti.on_clicked(callback.addMultiFitRegion)
 
     plt.show(block=True)
     plt.close()
     assert len(coordsList) > 0, "There are no selected ranges in the coordsList"
-    return coordsList
+    return coordsList, multiRegionCoordsList
 
 
 def prepareFittingModels(roiCoordsList):
@@ -338,7 +352,7 @@ def prepareFittingModels(roiCoordsList):
     return modelList, paramList
 
 
-def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, combinedModel: bool):
+def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegionCoordsList: list):
     modelList, paramList = prepareFittingModels(roiCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     axs[0].set_xlabel('$2\\theta$')
@@ -357,7 +371,7 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, combinedMo
 
     centerTwoThetaList = []
     heightList = []
-    if combinedModel:
+    if multiRegionCoordsList:
         combinedModel = modelList[0]
         combinedParams = paramList[0]
         if len(modelList) > 1:
@@ -431,8 +445,8 @@ def main():
     xrayData.background = rollingBallBackground(xrayData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the XrayData object
     xrayData.bgSubIntensity = xrayData.lnIntensity - xrayData.background  # Store the background subtracted intensity (natural log) in the XrayData object
     xrayData.expBgSubIntensity = np.exp(xrayData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the XrayData object
-    roiCoordsList = fittingRegionSelectionPlotting(xrayData)  # Interactive region of interest (ROI) selection for fitting
-    snContentFittingPlotting(xrayData, roiCoordsList, combinedModel)  # Plot, fit, correct for literature Ge substrate peak position, and display Sn Contents
+    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(xrayData)  # Interactive region of interest (ROI) selection for fitting
+    snContentFittingPlotting(xrayData, roiCoordsList, multiRegionCoordsList)  # Plot, fit, correct for literature Ge substrate peak position, and display Sn Contents
 
 
 if __name__ == "__main__":
