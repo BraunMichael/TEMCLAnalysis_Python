@@ -13,10 +13,6 @@ from lmfit.models import PseudoVoigtModel, VoigtModel
 from bisect import bisect_left
 
 
-combinedModel = False
-plotMulti = False
-
-
 class RollingBall:
     def __init__(self):
         self.radius = 1
@@ -193,25 +189,6 @@ def getXRDData():
     print("Working on:", nakedXRDFileName)
     xrdData = readXRDFile(xrdFileName)
     return xrdData, nakedXRDFileName
-
-
-def multiPlot(xrayDataObject, rollingBall, num_rollingBallRadii):
-    # This doesn't appear to actually catch warnings...
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore')
-        ballRadiusRange = np.linspace(rollingBall.minimumRadius, rollingBall.maximumRadius, num_rollingBallRadii)
-        AllBackgroundList = [rollingBallBackground(xrayDataObject, rollingBall.ratio, radius) for radius in ballRadiusRange]
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-    plt.plot(np.array(xrayDataObject.twoTheta), xrayDataObject.lnIntensity, 'k')
-    colors = cm.rainbow(np.linspace(0, 1, len(AllBackgroundList)))
-    for ydata, ballRadius, clr in zip(AllBackgroundList, ballRadiusRange, colors):
-        plot, = ax.plot(xrayDataObject.twoTheta, ydata, color=clr, label=round(ballRadius, 1))
-    plt.legend(loc='best', ncol=2)
-    plt.xlabel('$2\\theta$')
-    plt.ylabel('ln(Intensity)')
-    plt.xlim(xrayDataObject.minAngle-0.05, xrayDataObject.maxAngle)
-    plt.show(block=True)
 
 
 def backgroundSubtractionPlotting(xrayData: XrayData, rollingBall: RollingBall):
@@ -479,9 +456,6 @@ def main():
     xrdData, nakedXRDFileName = getXRDData()  # UI to get the input data files, needs to be 2 column text, csv, dat, or xy file, string headers are ok and will be ignored
     xrayData = XrayData(xrdData[0], xrdData[1], nakedXRDFileName)  # Make XrayData object and store data in it
     rollingBall = RollingBall()  # Initialize RollingBall object
-    if plotMulti:
-        num_rollingBallRadii = 20
-        multiPlot(xrayData, rollingBall, num_rollingBallRadii)  # Show a range of rolling ball radii on 1 plot
     backgroundSubtractionPlotting(xrayData, rollingBall)  # Interactive rolling ball background subtraction
     xrayData.background = rollingBallBackground(xrayData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the XrayData object
     xrayData.bgSubIntensity = xrayData.lnIntensity - xrayData.background  # Store the background subtracted intensity (natural log) in the XrayData object
