@@ -381,7 +381,7 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList):
             combinedRegionList = []
             indicesToDelete = []
             for roiIndex, roi in enumerate(roiCoordsList):
-                if not multiRegionXValsSet.isdisjoint(roiCoordsList[roiIndex]['x']):
+                if not multiRegionXValsSet.isdisjoint(roi['x']):
                     # There is at least 1 element in common between the roi and multiregion
                     combinedRegionList.append(roi)
                     indicesToDelete.append(roiIndex)
@@ -401,7 +401,6 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList):
 
 
 def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegionCoordsList: list):
-    print('in snContentFittingPlotting')
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     axs[0].set_xlabel('$2\\theta$')
@@ -410,7 +409,9 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
     fig.canvas.set_window_title(xrayData.nakedFileName+'_FittingResults')
 
     axs[0].plot(xrayData.twoTheta, xrayData.lnIntensity, 'k')
+    rawYmin, _ = axs[0].get_ylim()
     axs[1].plot(xrayData.twoTheta, xrayData.bgSubIntensity, 'b')
+    bgYmin, _ = axs[1].get_ylim()
     secax1 = axs[0].secondary_xaxis('top', functions=(calculateSnContent, calculateTwoTheta))
     secax1.set_xlabel('Sn Content (%)')
     secax2 = axs[1].secondary_xaxis('top', functions=(calculateSnContent, calculateTwoTheta))
@@ -424,10 +425,10 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
         print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
         print(out.fit_report(min_correl=0.25))
-        # TODO: Add check somehow for each region if there are actually more than 1 fitting component. probably check len(comps) and only plot comps if so
         comps = out.eval_components(x=subCoords['x'])
-        for _, component in comps.items():
-            axs[1].plot(subCoords['x'], np.log(component), 'g--')
+        if len(comps) > 1:
+            for _, component in comps.items():
+                axs[1].plot(subCoords['x'], np.log(component), 'g--')
         axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
         for key, value in out.best_values.items():
             if 'center' in key:
@@ -435,7 +436,6 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         for key in out.params.keys():
             if 'height' in key:
                 heightList.append(out.params[key].value)
-    plt.show(block=False)
 
     proposedUserSubstrateTwoTheta = centerTwoThetaList[heightList.index(max(heightList))]
     substrateModel = VoigtModel()
@@ -458,14 +458,14 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         print("Zach Comp:", round(calculateSnContent_Zach(centerTwoTheta), 1))
         if abs(centerTwoTheta-literatureSubstrateTwoTheta) > 0.05:  # Don't draw one for the substrate
             _, centerIndex = closestNumAndIndex(xrayData.twoTheta, centerTwoTheta + twoThetaOffset)
-            backgroundIntensity = xrayData.background[centerIndex]
-            # TODO: The arrows are a bit offset from the data now for some reason when doing the MultiFit Area, make sure the components can't be negative?
-            an0 = axs[0].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, np.log(intensity) + backgroundIntensity), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
+            an0 = axs[0].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, xrayData.lnIntensity[centerIndex]), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
             an0.draggable()
-            an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, np.log(intensity)), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
+            an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, xrayData.bgSubIntensity[centerIndex]), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
             an1.draggable()
 
     print("Results from:", xrayData.nakedFileName)
+    axs[0].set_ylim(bottom=rawYmin)
+    axs[1].set_ylim(bottom=bgYmin)
 
     plt.show(block=True)
     plt.close()
