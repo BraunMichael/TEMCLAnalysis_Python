@@ -332,7 +332,11 @@ def fittingRegionSelectionPlotting(xrayData: XrayData):
     plt.show(block=True)
     plt.close()
     assert len(coordsList) > 0, "There are no selected ranges in the coordsList"
-    # TODO: Need as assertion that the MultiFit Area's don't overlap!
+    for multiIndex, multiFitRegion in enumerate(multiRegionCoordsList):
+        multiFitRegionSet = set(multiFitRegion['x'])
+        for subMultiIndex, subMultiFitRegion in enumerate(multiRegionCoordsList):
+            if multiIndex != subMultiIndex:
+                assert not multiFitRegionSet.isdisjoint(subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
     return coordsList, multiRegionCoordsList
 
 
