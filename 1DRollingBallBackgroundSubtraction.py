@@ -332,7 +332,8 @@ def fittingRegionSelectionPlotting(xrayData: XrayData):
     return coordsList, multiRegionCoordsList
 
 
-def prepareFittingModels(roiCoordsList):
+def prepareFittingModels(roiCoordsList, multiRegionCoordsList):
+
     modelList = []
     paramList = []
     for entry, entryNum in zip(roiCoordsList, list(range(1, len(roiCoordsList) + 1))):
@@ -352,8 +353,26 @@ def prepareFittingModels(roiCoordsList):
     return modelList, paramList
 
 
+def splitMultiFitModels(roiCoordsList, multiRegionCoordsList: list[dict]):
+    combinedModelsList = []  # Each element of this list should be 1 combined model, each element is a list, if len == 1 then it's fit independently
+    if multiRegionCoordsList:
+        for multiRegion in multiRegionCoordsList:
+            multiRegionXValsSet = set(multiRegion['x'])
+            combinedRegionList = []
+            for roiIndex in range(len(roiCoordsList)):
+                if not multiRegionXValsSet.isdisjoint(roiCoordsList[roiIndex]['x']):
+                    # There is at least 1 element in common between the roi and multiregion
+                    combinedRegionList.append(roiCoordsList.pop(roiIndex))
+            assert combinedRegionList, "There were no detected regions in the MultiFit Area"
+            combinedModelsList.append(combinedRegionList)
+        combinedModelsList.extend(roiCoordsList)  # After removing any entries in a MultiFit Area, add the rest of them onto the model list
+    else:
+        combinedModelsList = roiCoordsList
+    return prepareFittingModels(combinedModelsList)
+
+
 def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegionCoordsList: list):
-    modelList, paramList = prepareFittingModels(roiCoordsList)
+    modelList, paramList = prepareFittingModels(roiCoordsList, multiRegionCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     axs[0].set_xlabel('$2\\theta$')
     axs[0].set_ylabel('ln(Intensity)')
