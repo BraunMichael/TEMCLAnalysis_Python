@@ -424,10 +424,11 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
         print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
         print(out.fit_report(min_correl=0.25))
-        axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
+        # TODO: Add check somehow for each region if there are actually more than 1 fitting component. probably check len(comps) and only plot comps if so
         comps = out.eval_components(x=subCoords['x'])
         for _, component in comps.items():
             axs[1].plot(subCoords['x'], np.log(component), 'g--')
+        axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
         for key, value in out.best_values.items():
             if 'center' in key:
                 centerTwoThetaList.append(value)
