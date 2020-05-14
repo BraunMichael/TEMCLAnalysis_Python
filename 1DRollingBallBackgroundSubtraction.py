@@ -109,10 +109,12 @@ def calculateTwoTheta(snContentPercent=0):
 
 
 def wavelengthnmToEnergyEV(wavelength):
+    wavelength[wavelength == 0] = 1e-15  # Don't try to divide by 0
     return (planck * speedOfLight * 10 ** 9) / wavelength
 
 
 def energyEVToWavelengthnm(energy):
+    energy[energy == 0] = 1e-15  # Don't try to divide by 0
     return (planck * speedOfLight * 10 ** 9) / energy
 
 
@@ -497,6 +499,7 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs):
 
 
 def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, isXRD: bool):
+    # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes https://matplotlib.org/examples/axes_grid/demo_parasite_axes2.html
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     if isXRD:
