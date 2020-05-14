@@ -612,6 +612,7 @@ def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, d
 
 
 def uiInput(win, setupOptions):
+    win.title("Spectrum Data Processing Setup UI")
     dataFileEntryText = tkinter.StringVar()
     darkFileEntryText = tkinter.StringVar()
 
