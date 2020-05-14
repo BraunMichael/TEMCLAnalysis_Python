@@ -104,6 +104,15 @@ def show_GeSnPL(win):
         r2isGeSnPL.grid(row=6, column=2)
 
 
+def on_closing(win, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL):
+    print(dataFileEntryText.get())
+    print(darkFileEntryText.get())
+    print(isXRD.get())
+    print(doBackgroundSubtraction.get())
+    print(isGeSnPL.get())
+    win.destroy()
+
+
 dataFileEntryText = tk.StringVar()
 darkFileEntryText = tk.StringVar()
 
@@ -135,4 +144,5 @@ r2doBgSub = tk.Radiobutton(win, text="No", variable=doBackgroundSubtraction, val
 r1doBgSub.grid(row=5, column=1)
 r2doBgSub.grid(row=5, column=2)
 
+win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL))
 win.mainloop()
