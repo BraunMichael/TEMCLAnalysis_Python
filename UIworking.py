@@ -87,6 +87,23 @@ def get_file(entryField, entryFieldText, titleMessage):
     entryField.config(width=len(listName.replace(os.path.expanduser('~'), '~')))
 
 
+def hide_GeSnPL(win):
+    if 'geSnPL_Label' in win.children:
+        win.children['geSnPL_Label'].destroy()
+        win.children['geSnPL_YesButton'].destroy()
+        win.children['geSnPL_NoButton'].destroy()
+
+
+def show_GeSnPL(win):
+    if 'geSnPL_Label' not in win.children:
+        item_Label = tk.Label(win, text="[PL Only] GeSn specific calculations?", name='geSnPL_Label')
+        item_Label.grid(row=6, column=0)
+        r1isGeSnPL = tk.Radiobutton(win, text="Yes", variable=isGeSnPL, value=1, name='geSnPL_YesButton')
+        r2isGeSnPL = tk.Radiobutton(win, text="No", variable=isGeSnPL, value=0, name='geSnPL_NoButton')
+        r1isGeSnPL.grid(row=6, column=1)
+        r2isGeSnPL.grid(row=6, column=2)
+
+
 dataFileEntryText = tk.StringVar()
 darkFileEntryText = tk.StringVar()
 
@@ -106,8 +123,8 @@ tk.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkF
 
 item_Label = tk.Label(win, text="XRD or PL/CL")
 item_Label.grid(row=4, column=0)
-r1isXRD = tk.Radiobutton(win, text="XRD", variable=isXRD, value=1)
-r2isXRD = tk.Radiobutton(win, text="PL/CL", variable=isXRD, value=0)
+r1isXRD = tk.Radiobutton(win, text="XRD", variable=isXRD, value=1, command=lambda: hide_GeSnPL(win))
+r2isXRD = tk.Radiobutton(win, text="PL/CL", variable=isXRD, value=0, command=lambda: show_GeSnPL(win))
 r1isXRD.grid(row=4, column=1)
 r2isXRD.grid(row=4, column=2)
 
@@ -117,15 +134,5 @@ r1doBgSub = tk.Radiobutton(win, text="Yes", variable=doBackgroundSubtraction, va
 r2doBgSub = tk.Radiobutton(win, text="No", variable=doBackgroundSubtraction, value=0)
 r1doBgSub.grid(row=5, column=1)
 r2doBgSub.grid(row=5, column=2)
-
-item_Label = tk.Label(win, text="[PL Only] GeSn specific calculations?")
-item_Label.grid(row=6, column=0)
-r1doBgSub = tk.Radiobutton(win, text="Yes", variable=isGeSnPL, value=1)
-r2doBgSub = tk.Radiobutton(win, text="No", variable=isGeSnPL, value=0)
-r1doBgSub.grid(row=6, column=1)
-r2doBgSub.grid(row=6, column=2)
-
-
-tk.Button(win, text='Submit', command=submit_values).grid(columnspan=2)
 
 win.mainloop()
