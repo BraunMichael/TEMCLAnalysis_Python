@@ -15,6 +15,7 @@ from bisect import bisect_left
 planck = 4.135667696 * (10 ** -15)  # eV * s
 speedOfLight = 299792458  # m/s
 
+
 class RollingBall:
     def __init__(self):
         self.radius = 1
