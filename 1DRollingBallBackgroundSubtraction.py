@@ -1,7 +1,9 @@
 import os
 import re
 import math
+import json
 import warnings
+import jsonpickle
 import numpy as np
 import tkinter
 from tkinter import Tk, filedialog
@@ -13,9 +15,6 @@ from matplotlib.ticker import AutoMinorLocator
 from lmfit.models import PseudoVoigtModel, VoigtModel
 from bisect import bisect_left
 
-isXRD = False
-doBackgroundSubtraction = False
-isGeSnPL = False
 planck = 4.135667696 * (10 ** -15)  # eV * s
 speedOfLight = 299792458  # m/s
 
@@ -585,7 +584,7 @@ def hide_GeSnPL(win):
         win.children['geSnPL_NoButton'].destroy()
 
 
-def show_GeSnPL(win):
+def show_GeSnPL(win, isGeSnPL):
     if 'geSnPL_Label' not in win.children:
         item_Label = tkinter.Label(win, text="[PL Only] GeSn specific calculations?", name='geSnPL_Label')
         item_Label.grid(row=6, column=0)
@@ -595,10 +594,15 @@ def show_GeSnPL(win):
         r2isGeSnPL.grid(row=6, column=2)
 
 
-def on_start(setupOptions):
+def get_setupOptions():
     # TODO: Add reading from JSON file into a SetupOptions object, then initialize uiInput with that SetupOptions object
-    setupOptions.dataFilePath = dataFileEntryText.get().replace(os.path.expanduser('~'), '~')
-    setupOptions.darkFilePath = darkFileEntryText.get().replace(os.path.expanduser('~'), '~')
+    try:
+        with open('SetupOptionsJSON.txt') as infile:
+            inputFile = json.load(infile)
+        setupOptions = jsonpickle.decode(inputFile)
+    except:
+        setupOptions = SetupOptions()
+    return setupOptions
 
 
 def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL):
@@ -608,32 +612,38 @@ def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, d
     setupOptions.isXRD = isXRD.get()
     setupOptions.doBackgroundSubtraction = doBackgroundSubtraction.get()
     setupOptions.isGeSnPL = isGeSnPL.get()
+    with open('SetupOptionsJSON.txt', 'w') as outfile:
+        json.dump(jsonpickle.encode(setupOptions), outfile)
     win.destroy()
 
 
 def uiInput(win, setupOptions):
     win.title("Spectrum Data Processing Setup UI")
-    dataFileEntryText = tkinter.StringVar()
-    darkFileEntryText = tkinter.StringVar()
+    dataFileEntryText = tkinter.StringVar(value=setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~'))
+    darkFileEntryText = tkinter.StringVar(value=setupOptions.darkFilePath.replace(os.path.expanduser('~'), '~'))
 
-    isXRD = tkinter.BooleanVar(value=True)
-    doBackgroundSubtraction = tkinter.BooleanVar(value=True)
-    isGeSnPL = tkinter.BooleanVar(value=False)
+    isXRD = tkinter.BooleanVar(value=setupOptions.isXRD)
+    doBackgroundSubtraction = tkinter.BooleanVar(value=setupOptions.doBackgroundSubtraction)
+    isGeSnPL = tkinter.BooleanVar(value=setupOptions.isGeSnPL)
 
     tkinter.Label(win, text="Data File:").grid(row=0, column=0)
     dataFileEntry = tkinter.Entry(win, textvariable=dataFileEntryText)
     dataFileEntry.grid(row=1, column=0)
-    tkinter.Button(win, text='Choose File', command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File')).grid(row=1, column=1)
+    dataFileEntry.config(width=len(setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~')))
+    dataFileButton = tkinter.Button(win, text='Choose File', command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File'))
+    dataFileButton.grid(row=1, column=1)
 
     tkinter.Label(win, text="Dark File:").grid(row=2, column=0)
     darkFileEntry = tkinter.Entry(win, textvariable=darkFileEntryText)
     darkFileEntry.grid(row=3, column=0)
-    tkinter.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkFileEntryText, 'Choose Dark Scan File')).grid(row=3, column=1)
+    dataFileEntry.config(width=len(setupOptions.darkFilePath.replace(os.path.expanduser('~'), '~')))
+    darkFileButton = tkinter.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkFileEntryText, 'Choose Dark Scan File'))
+    darkFileButton.grid(row=3, column=1)
 
     item_Label = tkinter.Label(win, text="XRD or PL/CL")
     item_Label.grid(row=4, column=0)
     r1isXRD = tkinter.Radiobutton(win, text="XRD", variable=isXRD, value=1, command=lambda: hide_GeSnPL(win))
-    r2isXRD = tkinter.Radiobutton(win, text="PL/CL", variable=isXRD, value=0, command=lambda: show_GeSnPL(win))
+    r2isXRD = tkinter.Radiobutton(win, text="PL/CL", variable=isXRD, value=0, command=lambda: show_GeSnPL(win, isGeSnPL))
     r1isXRD.grid(row=4, column=1)
     r2isXRD.grid(row=4, column=2)
 
@@ -644,12 +654,16 @@ def uiInput(win, setupOptions):
     r1doBgSub.grid(row=5, column=1)
     r2doBgSub.grid(row=5, column=2)
 
+    if setupOptions.isXRD:
+        hide_GeSnPL(win)
+    else:
+        show_GeSnPL(win, isGeSnPL)
     win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL))
     win.mainloop()
 
 
 def main():
-    setupOptions = SetupOptions()
+    setupOptions = get_setupOptions()
     uiInput(Tk(), setupOptions)
     rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
