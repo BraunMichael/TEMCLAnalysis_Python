@@ -23,6 +23,7 @@ def is_number(s):
     except ValueError:
         return False
 
+
 def getNakedNameFromFilePath(name):
     head, tail = os.path.split(name)
     nakedName, fileExtension = os.path.splitext(tail)
@@ -61,10 +62,29 @@ def submit_values():
     tk.Label(win, text=a).grid()
 
 
-def get_file(entryField, entryFieldText):
-    rawData, nakedRawFileName = getData()
-    entryFieldText.set(nakedRawFileName)
-    entryField.config(width=len(nakedRawFileName))
+
+def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file', fileTypes: str = None, initialDirOrFile: str = os.getcwd()):
+    if os.path.isfile(initialDirOrFile) or os.path.isdir(initialDirOrFile):
+        initialDir = os.path.split(initialDirOrFile)[0]
+    else:
+        initialDir = initialDirOrFile
+    root = Tk()
+    root.withdraw()
+    assert fileOrFolder.lower() == 'file' or fileOrFolder.lower() == 'folder', "Only file or folder is an allowed string choice for fileOrFolder"
+    if fileOrFolder.lower() == 'file':
+        fileOrFolderList = filedialog.askopenfilename(initialdir=initialDir, title=titleStr, filetypes=[(fileTypes + "file", fileTypes)])
+    else:  # Must be folder from assert statement
+        fileOrFolderList = filedialog.askdirectory(initialdir=initialDir, title=titleStr)
+    if not fileOrFolderList:
+        fileOrFolderList = initialDirOrFile
+    root.destroy()
+    return fileOrFolderList
+
+
+def get_file(entryField, entryFieldText, titleMessage):
+    listName = getFileOrDirList('file', titleMessage, '.txt .xy .csv .dat', entryFieldText.get().replace('~', os.path.expanduser('~')))
+    entryFieldText.set(listName.replace(os.path.expanduser('~'), '~'))
+    entryField.config(width=len(listName.replace(os.path.expanduser('~'), '~')))
 
 
 dataFileEntryText = tk.StringVar()
@@ -77,12 +97,12 @@ isGeSnPL = tk.BooleanVar(value=False)
 tk.Label(win, text="Data File:").grid(row=0, column=0)
 dataFileEntry = tk.Entry(win, textvariable=dataFileEntryText)
 dataFileEntry.grid(row=1, column=0)
-tk.Button(win, text='Choose File', command=lambda: get_file(dataFileEntry, dataFileEntryText)).grid(row=1, column=1)
+tk.Button(win, text='Choose File', command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File')).grid(row=1, column=1)
 
 tk.Label(win, text="Dark File:").grid(row=2, column=0)
 darkFileEntry = tk.Entry(win, textvariable=darkFileEntryText)
 darkFileEntry.grid(row=3, column=0)
-tk.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkFileEntryText)).grid(row=3, column=1)
+tk.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkFileEntryText, 'Choose Dark Scan File')).grid(row=3, column=1)
 
 item_Label = tk.Label(win, text="XRD or PL/CL")
 item_Label.grid(row=4, column=0)
