@@ -228,11 +228,7 @@ def setAxisTicks(axisHandle, secondaryAxis=False):
     axisHandle.yaxis.set_minor_locator(AutoMinorLocator(2))
 
 
-def getData():
-    root = Tk()
-    root.withdraw()
-    fileName = filedialog.askopenfilename(title='Choose XRD xy file', filetypes=[('Spectrum xyfile', '.txt .xy .dat .csv')])
-    root.destroy()
+def getData(fileName):
     if not fileName:
         quit()
     nakedRawFileName = getNakedNameFromFilePath(fileName)
@@ -492,26 +488,27 @@ def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
             an1.draggable()
 
 
-def plCalculationProcessing(spectrumData, centerXValsList, axs):
-    for centerWavelength in np.asarray(centerXValsList):
-        snContent = round(calculateEnergyEVToSnContent(centerWavelength), 1)
-        print("Sn Composition:", snContent)
-        _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerWavelength)
-        an0 = axs[0].annotate(str(abs(snContent)),
-                              xy=(centerWavelength, spectrumData.lnIntensity[centerIndex]),
-                              xycoords='data', xytext=(0, 72), textcoords='offset points',
-                              arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                              patchB=None))
-        an0.draggable()
-        an1 = axs[1].annotate(str(abs(snContent)),
-                              xy=(centerWavelength, spectrumData.bgSubIntensity[centerIndex]),
-                              xycoords='data', xytext=(0, 72), textcoords='offset points',
-                              arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                              patchB=None))
-        an1.draggable()
+def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
+    if isGeSnPL:
+        for centerWavelength in np.asarray(centerXValsList):
+            snContent = round(calculateEnergyEVToSnContent(centerWavelength), 1)
+            print("Sn Composition:", snContent)
+            _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerWavelength)
+            an0 = axs[0].annotate(str(abs(snContent)),
+                                  xy=(centerWavelength, spectrumData.lnIntensity[centerIndex]),
+                                  xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                  patchB=None))
+            an0.draggable()
+            an1 = axs[1].annotate(str(abs(snContent)),
+                                  xy=(centerWavelength, spectrumData.bgSubIntensity[centerIndex]),
+                                  xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                  patchB=None))
+            an1.draggable()
 
 
-def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, isXRD: bool):
+def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, isXRD: bool, isGeSnPL: bool):
     # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes https://matplotlib.org/examples/axes_grid/demo_parasite_axes2.html
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
@@ -547,7 +544,7 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     if isXRD:
         xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs)
     else:  # isPL
-        plCalculationProcessing(spectrumData, centerXValsList, axs)
+        plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL)
 
     print("Results from:", spectrumData.nakedFileName)
     axs[0].set_ylim(bottom=rawYmin)
@@ -598,15 +595,16 @@ def show_GeSnPL(win):
         r2isGeSnPL.grid(row=6, column=2)
 
 
-def on_start():
+def on_start(setupOptions):
     # TODO: Add reading from JSON file into a SetupOptions object, then initialize uiInput with that SetupOptions object
-    pass
+    setupOptions.dataFilePath = dataFileEntryText.get().replace(os.path.expanduser('~'), '~')
+    setupOptions.darkFilePath = darkFileEntryText.get().replace(os.path.expanduser('~'), '~')
 
 
 def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL):
     # TODO: Add storage to JSON file
-    setupOptions.dataFilePath = dataFileEntryText.get()
-    setupOptions.darkFilePath = darkFileEntryText.get()
+    setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
+    setupOptions.darkFilePath = darkFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.isXRD = isXRD.get()
     setupOptions.doBackgroundSubtraction = doBackgroundSubtraction.get()
     setupOptions.isGeSnPL = isGeSnPL.get()
@@ -652,18 +650,18 @@ def uiInput(win, setupOptions):
 def main():
     setupOptions = SetupOptions()
     uiInput(Tk(), setupOptions)
-    rawData, nakedRawFileName = getData()  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
-    if doBackgroundSubtraction:
+    if setupOptions.doBackgroundSubtraction:
         rollingBall = RollingBall()  # Initialize RollingBall object
-        backgroundSubtractionPlotting(spectrumData, rollingBall, isXRD)  # Interactive rolling ball background subtraction
+        backgroundSubtractionPlotting(spectrumData, rollingBall, setupOptions.isXRD)  # Interactive rolling ball background subtraction
         spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
     else:
         spectrumData.background = list(np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
     spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
     spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
-    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, isXRD)  # Interactive region of interest (ROI) selection for fitting
-    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, isXRD)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
+    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions.isXRD)  # Interactive region of interest (ROI) selection for fitting
+    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions.isXRD, setupOptions.isGeSnPL)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
 
 if __name__ == "__main__":
