@@ -12,6 +12,9 @@ from matplotlib.ticker import AutoMinorLocator
 from lmfit.models import PseudoVoigtModel, VoigtModel
 from bisect import bisect_left
 
+isXRD = False
+doBackgroundSubtraction = False
+isGeSnPL = False
 planck = 4.135667696 * (10 ** -15)  # eV * s
 speedOfLight = 299792458  # m/s
 
@@ -545,8 +548,6 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
 
 
 def main():
-    isXRD = False
-    doBackgroundSubtraction = False
     rawData, nakedRawFileName = getData()  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     if doBackgroundSubtraction:
