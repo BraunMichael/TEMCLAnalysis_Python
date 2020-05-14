@@ -12,6 +12,8 @@ from matplotlib.ticker import AutoMinorLocator
 from lmfit.models import PseudoVoigtModel, VoigtModel
 from bisect import bisect_left
 
+planck = 4.135667696 * (10 ** -15)  # eV * s
+speedOfLight = 299792458  # m/s
 
 class RollingBall:
     def __init__(self):
@@ -19,7 +21,7 @@ class RollingBall:
         self.ratio = 10
         self.minimumRadius = 0.1
         self.maximumRadius = 10
-        self.minimumRatio = 0.1
+        self.minimumRatio = 0.01
         self.maximumRatio = 100
 
         assert self.minimumRadius > 0, "You have a negative minimum rolling ball radius, must be positive"
@@ -30,15 +32,16 @@ class RollingBall:
         assert self.minimumRatio <= self.ratio <= self.maximumRatio, "Your rollingBallRadius is outside the range set by your minimum and maximum radius values"
 
 
-class XrayData:
-    def __init__(self, twoTheta: list = None, intensity: list = None, nakedXRDFileName: str = ''):
-        self.twoTheta = np.array(twoTheta)
+class SpectrumData:
+    def __init__(self, xVals: list = None, intensity: list = None, nakedFileName: str = ''):
+        self.xVals = np.array(xVals)
         self.intensity = np.array(intensity)
         self.lnIntensity = np.array(np.log(intensity))
-        self.nakedFileName = nakedXRDFileName
-        self.numAngles = len(self.twoTheta)
-        self.minAngle = min(self.twoTheta)
-        self.maxAngle = max(self.twoTheta)
+        self.nakedFileName = nakedFileName
+        self.numXVals = len(self.xVals)
+        self.minX = min(self.xVals)
+        self.maxX = max(self.xVals)
+        self.xRange = abs(self.maxX - self.minX)
         self.background = None
         self.bgSubIntensity = None  # ln of intensity
         self.expBgSubIntensity = None  # Raw intensity
@@ -57,7 +60,7 @@ plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
-def calculateSnContent(twoTheta):
+def calculateXRDSnContent(twoTheta):
     wavelength = 1.5405929  # Angstroms, Cu ka1
     aGe = 5.65791  # Angstroms
     aSn = 6.4892  # Angstroms
@@ -72,7 +75,7 @@ def calculateSnContent(twoTheta):
     return snContentPercent
 
 
-def calculateSnContent_Zach(doubletheta_GeSn):
+def calculateXRDSnContent_Zach(doubletheta_GeSn):
     """
     Given the double angle of the Ge-Sn peak, return the Sn comp of the Ge-Sn layer
     """
@@ -102,6 +105,37 @@ def calculateTwoTheta(snContentPercent=0):
     aSample = aGe + ((snContentPercent/100) * (aSn - aGe))
     twoTheta = 2 * np.rad2deg(np.arcsin(0.5 * (wavelength / np.sqrt(aSample**2 / h2k2l2))))
     return twoTheta
+
+
+def wavelengthnmToEnergyEV(wavelength):
+    return (planck * speedOfLight * 10 ** 9) / wavelength
+
+
+def energyEVToWavelengthnm(energy):
+    return (planck * speedOfLight * 10 ** 9) / energy
+
+
+def calculateSnContentToEnergyEV(snContent):
+    assert snContent < 1, "This takes fraction, not percent Sn"
+    # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
+    a_param = 0.79931
+    a_param_uncertainty = 0.000269
+    b_param = -3.17925
+    b_param_uncertainty = 0.00874
+    c_param = 1.78112
+    c_param_uncertainty = 0.0588
+    return a_param + b_param * snContent + c_param * snContent * snContent
+
+
+def calculateEnergyEVToSnContent(energy):
+    # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
+    a_param = 0.29475
+    a_param_uncertainty = 0.000775
+    b_param = -0.42567
+    b_param_uncertainty = 0.00272
+    c_param = 0.07138
+    c_param_uncertainty = 0.00231
+    return a_param + b_param * snContent + c_param * snContent * snContent
 
 
 def closestNumAndIndex(myList, myNumber):
@@ -137,8 +171,8 @@ def getNakedNameFromFilePath(name):
     return nakedName
 
 
-def readXRDFile(xrdFileNameFunc):
-    angleList = []
+def readDataFile(xrdFileNameFunc):
+    xValsList = []
     intensityList = []
     delimiters = ' ', ',', ', ', '\t', '\n'
     regexPattern = '|'.join(map(re.escape, delimiters))
@@ -146,9 +180,9 @@ def readXRDFile(xrdFileNameFunc):
         for line in file:
             splitLine = re.split(regexPattern, line)
             if all([is_number(splitLine[0]), is_number(splitLine[1])]):
-                angleList.append(float(splitLine[0]))
+                xValsList.append(float(splitLine[0]))
                 intensityList.append(float(splitLine[1]))
-    return np.asarray([angleList, intensityList])
+    return np.asarray([xValsList, intensityList])
 
 
 def calculateSingleBackground(measuredAngles, lnIntensities, angleNum, radiussquared, rollingBallRatioVal):
@@ -160,9 +194,9 @@ def calculateSingleBackground(measuredAngles, lnIntensities, angleNum, radiussqu
     return ballPoints - backgroundOffset
 
 
-def rollingBallBackground(xrayDataObject: XrayData, rollingBallRatioVal, radius):
+def rollingBallBackground(spectrumData: SpectrumData, rollingBallRatioVal, radius):
     radiussquared = radius*radius
-    allBackgrounds = [calculateSingleBackground(xrayDataObject.twoTheta, xrayDataObject.lnIntensity, angleNum, radiussquared, rollingBallRatioVal) for angleNum in range(xrayDataObject.numAngles)]
+    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, spectrumData.lnIntensity, angleNum, radiussquared, rollingBallRatioVal) for angleNum in range(spectrumData.numXVals)]
     return np.nanmax(allBackgrounds, axis=0)
 
 
@@ -178,39 +212,65 @@ def setAxisTicks(axisHandle, secondaryAxis=False):
     axisHandle.yaxis.set_minor_locator(AutoMinorLocator(2))
 
 
-def getXRDData():
+def getData():
     root = Tk()
     root.withdraw()
-    xrdFileName = filedialog.askopenfilename(title='Choose XRD xy file', filetypes=[('XRD xyfile', '.txt .xy .dat .csv')])
+    fileName = filedialog.askopenfilename(title='Choose XRD xy file', filetypes=[('Spectrum xyfile', '.txt .xy .dat .csv')])
     root.destroy()
-    if not xrdFileName:
+    if not fileName:
         quit()
-    nakedXRDFileName = getNakedNameFromFilePath(xrdFileName)
-    print("Working on:", nakedXRDFileName)
-    xrdData = readXRDFile(xrdFileName)
-    return xrdData, nakedXRDFileName
+    nakedRawFileName = getNakedNameFromFilePath(fileName)
+    print("Working on:", nakedRawFileName)
+    rawData = readDataFile(fileName)
+    return rawData, nakedRawFileName
 
 
-def backgroundSubtractionPlotting(xrayData: XrayData, rollingBall: RollingBall):
-    rollingBallBackgroundData = rollingBallBackground(xrayData, rollingBall.ratio, rollingBall.radius)
+def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, plotYLabel: str, isXRD: bool, withTopAxis: bool = False):
+    fig.canvas.set_window_title(fileName + '_' + windowTitleSuffix)
+    setAxisTicks(ax)
+    if plotXLabel:
+        ax.set_xlabel(plotXLabel)
+    if plotYLabel:
+        ax.set_ylabel(plotYLabel)
+    if isXRD:
+        if withTopAxis:
+            secax = ax.secondary_xaxis('top', functions=(calculateXRDSnContent, calculateTwoTheta))
+            secax.set_xlabel('Sn Content (%)')
+            setAxisTicks(secax, True)
+    else:  # isPL
+        if withTopAxis:
+            secax = ax.secondary_xaxis('top', functions=(wavelengthnmToEnergyEV, energyEVToWavelengthnm))
+            secax.set_xlabel('Energy (eV)')
+            setAxisTicks(secax, True)
+
+
+def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: RollingBall, isXRD: bool):
+    rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)
     fig, ax = plt.subplots(figsize=(10, 8))
-    fig.canvas.set_window_title(xrayData.nakedFileName+'_BackgroundSubtraction')
+    if isXRD:
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        rollingBall.radius = spectrumData.xRange
+    else:  # isPL
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        rollingBall.radius = spectrumData.xRange*10
+        rollingBall.ratio = 1
     plt.subplots_adjust(bottom=0.25)
     ax.margins(x=0)
-    setAxisTicks(ax)
-    secax = ax.secondary_xaxis('top', functions=(calculateSnContent, calculateTwoTheta))
-    secax.set_xlabel('Sn Content (%)')
-    setAxisTicks(secax, True)
-
-    plt.plot(xrayData.twoTheta, xrayData.lnIntensity, 'k')
-    background, = plt.plot(xrayData.twoTheta, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
-    subtracted, = plt.plot(xrayData.twoTheta, xrayData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
+    plt.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
+    background, = plt.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
+    subtracted, = plt.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
     plt.legend(loc='best')
-    plt.xlabel('$2\\theta$')
-    plt.ylabel('ln(Intensity)')
+
     axRadius = plt.axes([0.25, 0.05, 0.65, 0.03])
     axRatio = plt.axes([0.25, 0.10, 0.65, 0.03])
 
+    log10xRangeBasis = np.log10(spectrumData.xRange / 4)
+    if np.floor(log10xRangeBasis) == round(log10xRangeBasis):
+        rollingBall.minimumRadius = 10 ** (np.floor(log10xRangeBasis) - 1)
+        rollingBall.maximumRadius = 10 ** (np.ceil(log10xRangeBasis) + 1)
+    else:
+        rollingBall.minimumRadius = 10 ** np.floor(log10xRangeBasis)
+        rollingBall.maximumRadius = 10 ** (np.ceil(log10xRangeBasis) + 2)
     sRadius = Slider(axRadius, 'Rolling Ball Radius', np.log10(rollingBall.minimumRadius), np.log10(rollingBall.maximumRadius), valinit=np.log10(rollingBall.radius))
     sRatio = Slider(axRatio, 'Aspect Ratio', np.log10(rollingBall.minimumRatio), np.log10(rollingBall.maximumRatio), valinit=np.log10(rollingBall.ratio))
     sRadius.valtext.set_text(rollingBall.radius)
@@ -219,9 +279,9 @@ def backgroundSubtractionPlotting(xrayData: XrayData, rollingBall: RollingBall):
     def update(val):
         sRadius.valtext.set_text('{:.1f}'.format(10**sRadius.val))
         sRatio.valtext.set_text('{:.1f}'.format(10**sRatio.val))
-        rollingBallBackgroundDataUpdate = rollingBallBackground(xrayData, 10 ** sRatio.val, 10 ** sRadius.val)
+        rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val)
         background.set_ydata(rollingBallBackgroundDataUpdate)
-        subtracted.set_ydata(xrayData.lnIntensity - rollingBallBackgroundDataUpdate)
+        subtracted.set_ydata(spectrumData.lnIntensity - rollingBallBackgroundDataUpdate)
         fig.canvas.draw_idle()
 
     sRadius.on_changed(update)
@@ -233,30 +293,29 @@ def backgroundSubtractionPlotting(xrayData: XrayData, rollingBall: RollingBall):
     plt.close()
 
 
-def fittingRegionSelectionPlotting(xrayData: XrayData):
+def fittingRegionSelectionPlotting(spectrumData: SpectrumData, isXRD:bool):
     # Each "region" limits the peak center position
     # Each MultiFit Area uses all the data in the selected area and tries to fit the regions within to the whole data,
     # Except the peak center of each region in the MultiFit area is limited to its selected region
     fig, ax = plt.subplots(figsize=(10, 8))
-    fig.canvas.set_window_title(xrayData.nakedFileName + '_PeakFitting')
+    if isXRD:
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+    else:  # isPL
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+
     plt.subplots_adjust(bottom=0.2)
-    plt.plot(xrayData.twoTheta, xrayData.bgSubIntensity, 'b')
-    plt.xlabel('$2\\theta$')
-    plt.ylabel('ln(Intensity)')
-    secax = ax.secondary_xaxis('top', functions=(calculateSnContent, calculateTwoTheta))
-    secax.set_xlabel('Sn Content (%)')
-    setAxisTicks(ax)
+    plt.plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
 
     class RangeSelect:
         def __init__(self):
             self.coords = {}
 
         def __call__(self, xmin, xmax):
-            indmin, indmax = np.searchsorted(xrayData.twoTheta, (xmin, xmax))
-            indmax = min(len(xrayData.twoTheta) - 1, indmax)
+            indmin, indmax = np.searchsorted(spectrumData.xVals, (xmin, xmax))
+            indmax = min(len(spectrumData.xVals) - 1, indmax)
 
-            thisx = xrayData.twoTheta[indmin:indmax]
-            thisy = xrayData.bgSubIntensity[indmin:indmax]
+            thisx = spectrumData.xVals[indmin:indmax]
+            thisy = spectrumData.bgSubIntensity[indmin:indmax]
             self.coords['x'] = thisx
             self.coords['y'] = thisy
             (ymin, ymax) = ax.get_ylim()
@@ -297,9 +356,9 @@ def fittingRegionSelectionPlotting(xrayData: XrayData):
             plt.draw()
 
     callback = Index()
-    axAddRegion = plt.axes([0.7, 0.05, 0.2, 0.075])
+    axAddRegion = plt.axes([0.7, 0.02, 0.2, 0.075])
     bAdd = Button(axAddRegion, 'Add Region')
-    axAddRegion = plt.axes([0.45, 0.05, 0.2, 0.075])
+    axAddRegion = plt.axes([0.45, 0.02, 0.2, 0.075])
     bMulti = Button(axAddRegion, 'MultiFit Area')
     numRanges = 1
     span = SpanSelector(ax, rangeselect, 'horizontal', useblit=False, rectprops=dict(alpha=0.3, facecolor='red'))
@@ -381,26 +440,76 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList):
     return prepareFittingModels(combinedModelsList), coordsList
 
 
-def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegionCoordsList: list):
+def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
+    proposedUserSubstrateTwoTheta = centerXValsList[heightList.index(max(heightList))]
+    substrateModel = VoigtModel()
+    params = substrateModel.guess(spectrumData.expBgSubIntensity, x=spectrumData.xVals, negative=False)
+    out = substrateModel.fit(spectrumData.expBgSubIntensity, params, x=spectrumData.xVals)
+    fullModelSubstrateTwoTheta = out.best_values['center']
+    if abs(fullModelSubstrateTwoTheta - proposedUserSubstrateTwoTheta) <= 0.1:
+        # looks like the user selected the substrate as a peak, use their value
+        substrateTwoTheta = proposedUserSubstrateTwoTheta
+    else:
+        # Looks like the user did not select the substrate as a peak, use a global value from fitting all data
+        substrateTwoTheta = fullModelSubstrateTwoTheta
+
+    literatureSubstrateTwoTheta = calculateTwoTheta(snContentPercent=0)  # Reusing Sn content to 2theta equation
+    twoThetaOffset = substrateTwoTheta - literatureSubstrateTwoTheta
+    offsetCorrectedCenterTwoThetaList = np.asarray(centerXValsList) - twoThetaOffset
+    for centerTwoTheta in offsetCorrectedCenterTwoThetaList:
+        michaelSnContent = round(calculateXRDSnContent(centerTwoTheta), 1)
+        print("Michael Comp:", michaelSnContent)
+        print("Zach Comp:", round(calculateXRDSnContent_Zach(centerTwoTheta), 1))
+        if abs(centerTwoTheta - literatureSubstrateTwoTheta) > 0.05:  # Don't draw one for the substrate
+            _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerTwoTheta + twoThetaOffset)
+            an0 = axs[0].annotate(str(abs(michaelSnContent)),
+                                  xy=(centerTwoTheta + twoThetaOffset, spectrumData.lnIntensity[centerIndex]),
+                                  xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                  patchB=None))
+            an0.draggable()
+            an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(
+                centerTwoTheta + twoThetaOffset, spectrumData.bgSubIntensity[centerIndex]), xycoords='data',
+                                  xytext=(0, 72), textcoords='offset points',
+                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                  patchB=None))
+            an1.draggable()
+
+
+def plCalculationProcessing(spectrumData, centerXValsList, axs):
+    for centerWavelength in np.asarray(centerXValsList):
+        snContent = round(calculateEnergyEVToSnContent(centerWavelength), 1)
+        print("Sn Composition:", snContent)
+        _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerWavelength)
+        an0 = axs[0].annotate(str(abs(snContent)),
+                              xy=(centerWavelength, spectrumData.lnIntensity[centerIndex]),
+                              xycoords='data', xytext=(0, 72), textcoords='offset points',
+                              arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                              patchB=None))
+        an0.draggable()
+        an1 = axs[1].annotate(str(abs(snContent)),
+                              xy=(centerWavelength, spectrumData.bgSubIntensity[centerIndex]),
+                              xycoords='data', xytext=(0, 72), textcoords='offset points',
+                              arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                              patchB=None))
+        an1.draggable()
+
+
+def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, isXRD: bool):
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList)
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
-    axs[0].set_xlabel('$2\\theta$')
-    axs[0].set_ylabel('ln(Intensity)')
-    axs[1].set_xlabel('$2\\theta$')
-    fig.canvas.set_window_title(xrayData.nakedFileName+'_FittingResults')
-
-    axs[0].plot(xrayData.twoTheta, xrayData.lnIntensity, 'k')
+    if isXRD:
+        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='', isXRD=isXRD, withTopAxis=True)
+    else:  # isPL
+        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='', isXRD=isXRD, withTopAxis=True)
+    axs[0].plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
     rawYmin, _ = axs[0].get_ylim()
-    axs[1].plot(xrayData.twoTheta, xrayData.bgSubIntensity, 'b')
+    axs[1].plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
     bgYmin, _ = axs[1].get_ylim()
-    secax1 = axs[0].secondary_xaxis('top', functions=(calculateSnContent, calculateTwoTheta))
-    secax1.set_xlabel('Sn Content (%)')
-    secax2 = axs[1].secondary_xaxis('top', functions=(calculateSnContent, calculateTwoTheta))
-    secax2.set_xlabel('Sn Content (%)')
-    for ax in axs:
-        setAxisTicks(ax)
 
-    centerTwoThetaList = []
+    centerXValsList = []
     heightList = []
     for model, params, subCoords in zip(modelList, paramList, fittingCoordsList):
         out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
@@ -413,38 +522,17 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
         axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
         for key, value in out.best_values.items():
             if 'center' in key:
-                centerTwoThetaList.append(value)
+                centerXValsList.append(value)
         for key in out.params.keys():
             if 'height' in key:
                 heightList.append(out.params[key].value)
 
-    proposedUserSubstrateTwoTheta = centerTwoThetaList[heightList.index(max(heightList))]
-    substrateModel = VoigtModel()
-    params = substrateModel.guess(xrayData.expBgSubIntensity, x=xrayData.twoTheta, negative=False)
-    out = substrateModel.fit(xrayData.expBgSubIntensity, params, x=xrayData.twoTheta)
-    fullModelSubstrateTwoTheta = out.best_values['center']
-    if abs(fullModelSubstrateTwoTheta - proposedUserSubstrateTwoTheta) <= 0.1:
-        # looks like the user selected the substrate as a peak, use their value
-        substrateTwoTheta = proposedUserSubstrateTwoTheta
-    else:
-        # Looks like the user did not select the substrate as a peak, use a global value from fitting all data
-        substrateTwoTheta = fullModelSubstrateTwoTheta
+    if isXRD:
+        xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs)
+    else:  # isPL
+        plCalculationProcessing(spectrumData, centerXValsList, axs)
 
-    literatureSubstrateTwoTheta = calculateTwoTheta(snContentPercent=0)  # Reusing Sn content to 2theta equation
-    twoThetaOffset = substrateTwoTheta - literatureSubstrateTwoTheta
-    offsetCorrectedCenterTwoThetaList = np.asarray(centerTwoThetaList) - twoThetaOffset
-    for centerTwoTheta, intensity in zip(offsetCorrectedCenterTwoThetaList, heightList):
-        michaelSnContent = round(calculateSnContent(centerTwoTheta), 1)
-        print("Michael Comp:", michaelSnContent)
-        print("Zach Comp:", round(calculateSnContent_Zach(centerTwoTheta), 1))
-        if abs(centerTwoTheta-literatureSubstrateTwoTheta) > 0.05:  # Don't draw one for the substrate
-            _, centerIndex = closestNumAndIndex(xrayData.twoTheta, centerTwoTheta + twoThetaOffset)
-            an0 = axs[0].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, xrayData.lnIntensity[centerIndex]), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
-            an0.draggable()
-            an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(centerTwoTheta + twoThetaOffset, xrayData.bgSubIntensity[centerIndex]), xycoords='data', xytext=(0, 72), textcoords='offset points', arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None, patchB=None))
-            an1.draggable()
-
-    print("Results from:", xrayData.nakedFileName)
+    print("Results from:", spectrumData.nakedFileName)
     axs[0].set_ylim(bottom=rawYmin)
     axs[1].set_ylim(bottom=bgYmin)
 
@@ -453,15 +541,20 @@ def snContentFittingPlotting(xrayData: XrayData, roiCoordsList: list, multiRegio
 
 
 def main():
-    xrdData, nakedXRDFileName = getXRDData()  # UI to get the input data files, needs to be 2 column text, csv, dat, or xy file, string headers are ok and will be ignored
-    xrayData = XrayData(xrdData[0], xrdData[1], nakedXRDFileName)  # Make XrayData object and store data in it
-    rollingBall = RollingBall()  # Initialize RollingBall object
-    backgroundSubtractionPlotting(xrayData, rollingBall)  # Interactive rolling ball background subtraction
-    xrayData.background = rollingBallBackground(xrayData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the XrayData object
-    xrayData.bgSubIntensity = xrayData.lnIntensity - xrayData.background  # Store the background subtracted intensity (natural log) in the XrayData object
-    xrayData.expBgSubIntensity = np.exp(xrayData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the XrayData object
-    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(xrayData)  # Interactive region of interest (ROI) selection for fitting
-    snContentFittingPlotting(xrayData, roiCoordsList, multiRegionCoordsList)  # Plot, fit, correct for literature Ge substrate peak position, and display Sn Contents
+    isXRD = False
+    doBackgroundSubtraction = False
+    rawData, nakedRawFileName = getData()  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
+    if doBackgroundSubtraction:
+        rollingBall = RollingBall()  # Initialize RollingBall object
+        backgroundSubtractionPlotting(spectrumData, rollingBall, isXRD)  # Interactive rolling ball background subtraction
+        spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
+    else:
+        spectrumData.background = list(np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
+    spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
+    spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
+    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, isXRD)  # Interactive region of interest (ROI) selection for fitting
+    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, isXRD)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
 
 if __name__ == "__main__":
