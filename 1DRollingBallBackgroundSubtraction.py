@@ -3,6 +3,7 @@ import re
 import math
 import warnings
 import numpy as np
+import tkinter
 from tkinter import Tk, filedialog
 from matplotlib import cm
 import matplotlib.pyplot as plt
@@ -49,6 +50,15 @@ class SpectrumData:
         self.background = None
         self.bgSubIntensity = None  # ln of intensity
         self.expBgSubIntensity = None  # Raw intensity
+
+
+class SetupOptions:
+    def __init__(self):
+        self.dataFilePath = ''
+        self.darkFilePath = ''
+        self.isXRD = True
+        self.doBackgroundSubtraction = True
+        self.isGeSnPL = False
 
 
 SMALL_SIZE = 18
@@ -547,7 +557,101 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     plt.close()
 
 
+def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file', fileTypes: str = None, initialDirOrFile: str = os.getcwd()):
+    if os.path.isfile(initialDirOrFile) or os.path.isdir(initialDirOrFile):
+        initialDir = os.path.split(initialDirOrFile)[0]
+    else:
+        initialDir = initialDirOrFile
+    root = Tk()
+    root.withdraw()
+    assert fileOrFolder.lower() == 'file' or fileOrFolder.lower() == 'folder', "Only file or folder is an allowed string choice for fileOrFolder"
+    if fileOrFolder.lower() == 'file':
+        fileOrFolderList = filedialog.askopenfilename(initialdir=initialDir, title=titleStr, filetypes=[(fileTypes + "file", fileTypes)])
+    else:  # Must be folder from assert statement
+        fileOrFolderList = filedialog.askdirectory(initialdir=initialDir, title=titleStr)
+    if not fileOrFolderList:
+        fileOrFolderList = initialDirOrFile
+    root.destroy()
+    return fileOrFolderList
+
+
+def get_file(entryField, entryFieldText, titleMessage):
+    listName = getFileOrDirList('file', titleMessage, '.txt .xy .csv .dat', entryFieldText.get().replace('~', os.path.expanduser('~')))
+    entryFieldText.set(listName.replace(os.path.expanduser('~'), '~'))
+    entryField.config(width=len(listName.replace(os.path.expanduser('~'), '~')))
+
+
+def hide_GeSnPL(win):
+    if 'geSnPL_Label' in win.children:
+        win.children['geSnPL_Label'].destroy()
+        win.children['geSnPL_YesButton'].destroy()
+        win.children['geSnPL_NoButton'].destroy()
+
+
+def show_GeSnPL(win):
+    if 'geSnPL_Label' not in win.children:
+        item_Label = tkinter.Label(win, text="[PL Only] GeSn specific calculations?", name='geSnPL_Label')
+        item_Label.grid(row=6, column=0)
+        r1isGeSnPL = tkinter.Radiobutton(win, text="Yes", variable=isGeSnPL, value=1, name='geSnPL_YesButton')
+        r2isGeSnPL = tkinter.Radiobutton(win, text="No", variable=isGeSnPL, value=0, name='geSnPL_NoButton')
+        r1isGeSnPL.grid(row=6, column=1)
+        r2isGeSnPL.grid(row=6, column=2)
+
+
+def on_start():
+    # TODO: Add reading from JSON file into a SetupOptions object, then initialize uiInput with that SetupOptions object
+    pass
+
+
+def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL):
+    # TODO: Add storage to JSON file
+    setupOptions.dataFilePath = dataFileEntryText.get()
+    setupOptions.darkFilePath = darkFileEntryText.get()
+    setupOptions.isXRD = isXRD.get()
+    setupOptions.doBackgroundSubtraction = doBackgroundSubtraction.get()
+    setupOptions.isGeSnPL = isGeSnPL.get()
+    win.destroy()
+
+
+def uiInput(win, setupOptions):
+    dataFileEntryText = tkinter.StringVar()
+    darkFileEntryText = tkinter.StringVar()
+
+    isXRD = tkinter.BooleanVar(value=True)
+    doBackgroundSubtraction = tkinter.BooleanVar(value=True)
+    isGeSnPL = tkinter.BooleanVar(value=False)
+
+    tkinter.Label(win, text="Data File:").grid(row=0, column=0)
+    dataFileEntry = tkinter.Entry(win, textvariable=dataFileEntryText)
+    dataFileEntry.grid(row=1, column=0)
+    tkinter.Button(win, text='Choose File', command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File')).grid(row=1, column=1)
+
+    tkinter.Label(win, text="Dark File:").grid(row=2, column=0)
+    darkFileEntry = tkinter.Entry(win, textvariable=darkFileEntryText)
+    darkFileEntry.grid(row=3, column=0)
+    tkinter.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkFileEntryText, 'Choose Dark Scan File')).grid(row=3, column=1)
+
+    item_Label = tkinter.Label(win, text="XRD or PL/CL")
+    item_Label.grid(row=4, column=0)
+    r1isXRD = tkinter.Radiobutton(win, text="XRD", variable=isXRD, value=1, command=lambda: hide_GeSnPL(win))
+    r2isXRD = tkinter.Radiobutton(win, text="PL/CL", variable=isXRD, value=0, command=lambda: show_GeSnPL(win))
+    r1isXRD.grid(row=4, column=1)
+    r2isXRD.grid(row=4, column=2)
+
+    item_Label = tkinter.Label(win, text="Background subtraction (interactive)?")
+    item_Label.grid(row=5, column=0)
+    r1doBgSub = tkinter.Radiobutton(win, text="Yes", variable=doBackgroundSubtraction, value=1)
+    r2doBgSub = tkinter.Radiobutton(win, text="No", variable=doBackgroundSubtraction, value=0)
+    r1doBgSub.grid(row=5, column=1)
+    r2doBgSub.grid(row=5, column=2)
+
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL))
+    win.mainloop()
+
+
 def main():
+    setupOptions = SetupOptions()
+    uiInput(Tk(), setupOptions)
     rawData, nakedRawFileName = getData()  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     if doBackgroundSubtraction:
