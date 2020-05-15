@@ -122,12 +122,18 @@ def calculateTwoTheta(snContentPercent=0):
 
 
 def wavelengthnmToEnergyEV(wavelength):
-    wavelength[wavelength == 0] = 1e-15  # Don't try to divide by 0
+    if isinstance(wavelength, np.ndarray):
+        wavelength[wavelength == 0] = 1e-15  # Don't try to divide by 0
+    elif wavelength == 0:  # For now assuming it's otherwise just a single number
+        wavelength = 1e-15
     return (planck * speedOfLight * 10 ** 9) / wavelength
 
 
 def energyEVToWavelengthnm(energy):
-    energy[energy == 0] = 1e-15  # Don't try to divide by 0
+    if isinstance(energy, np.ndarray):
+        energy[energy == 0] = 1e-15  # Don't try to divide by 0
+    elif energy == 0:  # For now assuming it's otherwise just a single number
+        energy = 1e-15
     return (planck * speedOfLight * 10 ** 9) / energy
 
 
