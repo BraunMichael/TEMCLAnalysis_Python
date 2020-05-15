@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Slider, SpanSelector, Button
 from matplotlib.ticker import AutoMinorLocator
-from lmfit.models import PseudoVoigtModel, VoigtModel
+from lmfit.models import GaussianModel, PseudoVoigtModel, VoigtModel, LorentzianModel
 from bisect import bisect_left
 
 planck = 4.135667696 * (10 ** -15)  # eV * s
@@ -58,6 +58,7 @@ class SetupOptions:
         self.isXRD = True
         self.doBackgroundSubtraction = True
         self.isGeSnPL = False
+        self.modelType = ("gaussian", 0)
 
 
 SMALL_SIZE = 18
@@ -134,23 +135,23 @@ def calculateSnContentToEnergyEV(snContent):
     assert snContent < 1, "This takes fraction, not percent Sn"
     # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
     a_param = 0.79931
-    a_param_uncertainty = 0.000269
+    # a_param_uncertainty = 0.000269
     b_param = -3.17925
-    b_param_uncertainty = 0.00874
+    # b_param_uncertainty = 0.00874
     c_param = 1.78112
-    c_param_uncertainty = 0.0588
+    # c_param_uncertainty = 0.0588
     return a_param + b_param * snContent + c_param * snContent * snContent
 
 
 def calculateEnergyEVToSnContent(energy):
     # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
     a_param = 0.29475
-    a_param_uncertainty = 0.000775
+    # a_param_uncertainty = 0.000775
     b_param = -0.42567
-    b_param_uncertainty = 0.00272
+    # b_param_uncertainty = 0.00272
     c_param = 0.07138
-    c_param_uncertainty = 0.00231
-    return a_param + b_param * snContent + c_param * snContent * snContent
+    # c_param_uncertainty = 0.00231
+    return a_param + b_param * energy + c_param * energy * energy
 
 
 def closestNumAndIndex(myList, myNumber):
@@ -304,7 +305,7 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     plt.close()
 
 
-def fittingRegionSelectionPlotting(spectrumData: SpectrumData, isXRD:bool):
+def fittingRegionSelectionPlotting(spectrumData: SpectrumData, isXRD: bool):
     # Each "region" limits the peak center position
     # Each MultiFit Area uses all the data in the selected area and tries to fit the regions within to the whole data,
     # Except the peak center of each region in the MultiFit area is limited to its selected region
@@ -387,7 +388,7 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, isXRD:bool):
     return coordsList, multiRegionCoordsList
 
 
-def prepareFittingModels(roiCoordsList):
+def prepareFittingModels(roiCoordsList, modelType):
     modelList = []
     paramList = []
     index = 1
@@ -403,14 +404,25 @@ def prepareFittingModels(roiCoordsList):
             # pull info out of region dict
             selectedXVals = entry['x']
             selectedYVals = np.exp(entry['y'])
-            # mod = PseudoVoigtModel(prefix=prefixName))
-            mod = VoigtModel(prefix=prefixName)
+
+            if modelType.lower() == 'voigt':
+                mod = VoigtModel(prefix=prefixName)
+            elif modelType.lower() == 'psuedovoigt':
+                mod = PseudoVoigtModel(prefix=prefixName)
+            elif modelType.lower() == 'lorentzian':
+                mod = LorentzianModel(prefix=prefixName)
+            elif modelType.lower() == 'gaussian':
+                mod = GaussianModel(prefix=prefixName)
+            else:
+                assert True, "Entered model type is not supported"
+
             individualModelsList.append(mod)
             pars = mod.guess(selectedYVals, x=selectedXVals, negative=False)
             pars[prefixName+'center'].set(min=min(selectedXVals), max=max(selectedXVals))
             pars[prefixName + 'amplitude'].set(min=0)
             pars[prefixName + 'sigma'].set(min=0)
-            pars[prefixName + 'gamma'].set(value=0.3, vary=True, expr='', min=0)
+            if modelType.lower() == 'voigt':
+                pars[prefixName + 'gamma'].set(value=0.3, vary=True, expr='', min=0)
             individualParamsList.append(pars)
         combinedModel = individualModelsList[0]
         combinedParams = individualParamsList[0]
@@ -423,7 +435,7 @@ def prepareFittingModels(roiCoordsList):
     return modelList, paramList
 
 
-def splitMultiFitModels(roiCoordsList, multiRegionCoordsList):
+def splitMultiFitModels(roiCoordsList, multiRegionCoordsList, modelType: str):
     combinedModelsList = []  # Each element of this list should be 1 combined model, each element is a list, if len == 1 then it's fit independently
     coordsList = []  # Defines the area to fit each element of combinedModelsList, see fittingRegionSelectionPlotting for more info
     if multiRegionCoordsList:
@@ -448,7 +460,7 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList):
     else:
         combinedModelsList = roiCoordsList
         coordsList = roiCoordsList
-    return prepareFittingModels(combinedModelsList), coordsList
+    return prepareFittingModels(combinedModelsList, modelType), coordsList
 
 
 def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
@@ -507,9 +519,10 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
             an1.draggable()
 
 
-def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, isXRD: bool, isGeSnPL: bool):
+def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, setupOptions: SetupOptions):
     # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes https://matplotlib.org/examples/axes_grid/demo_parasite_axes2.html
-    (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList)
+    isXRD = setupOptions.isXRD
+    (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList, setupOptions.modelType[0])
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     if isXRD:
         plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
@@ -543,7 +556,7 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     if isXRD:
         xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs)
     else:  # isPL
-        plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL)
+        plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions.isGeSnPL)
 
     print("Results from:", spectrumData.nakedFileName)
     axs[0].set_ylim(bottom=rawYmin)
@@ -587,11 +600,11 @@ def hide_GeSnPL(win):
 def show_GeSnPL(win, isGeSnPL):
     if 'geSnPL_Label' not in win.children:
         item_Label = tkinter.Label(win, text="[PL Only] GeSn specific calculations?", name='geSnPL_Label')
-        item_Label.grid(row=6, column=0)
+        item_Label.grid(row=7, column=0)
         r1isGeSnPL = tkinter.Radiobutton(win, text="Yes", variable=isGeSnPL, value=1, name='geSnPL_YesButton')
         r2isGeSnPL = tkinter.Radiobutton(win, text="No", variable=isGeSnPL, value=0, name='geSnPL_NoButton')
-        r1isGeSnPL.grid(row=6, column=1)
-        r2isGeSnPL.grid(row=6, column=2)
+        r1isGeSnPL.grid(row=7, column=1)
+        r2isGeSnPL.grid(row=7, column=2)
 
 
 def get_setupOptions():
@@ -605,13 +618,14 @@ def get_setupOptions():
     return setupOptions
 
 
-def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL):
+def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelType):
     # TODO: Add storage to JSON file
     setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.darkFilePath = darkFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.isXRD = isXRD.get()
     setupOptions.doBackgroundSubtraction = doBackgroundSubtraction.get()
     setupOptions.isGeSnPL = isGeSnPL.get()
+    setupOptions.modelType = modelType
     with open('SetupOptionsJSON.txt', 'w') as outfile:
         json.dump(jsonpickle.encode(setupOptions), outfile)
     win.destroy()
@@ -654,11 +668,22 @@ def uiInput(win, setupOptions):
     r1doBgSub.grid(row=5, column=1)
     r2doBgSub.grid(row=5, column=2)
 
+    modelTypes = [("Gaussian", 0), ("Voigt", 1), ("Psuedovoigt", 2), ("Lorentzian", 3)]
+
+    varModelType = tkinter.IntVar()
+    varModelType.set(setupOptions.modelType[1])
+
+    item_Label = tkinter.Label(win, text="Fitting Model")
+    item_Label.grid(row=6, column=0)
+    for model, number in modelTypes:
+        radioModelType = tkinter.Radiobutton(win, text=model, variable=varModelType, value=number)
+        radioModelType.grid(row=6, column=(number + 1))
+
     if setupOptions.isXRD:
         hide_GeSnPL(win)
     else:
         show_GeSnPL(win, isGeSnPL)
-    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL))
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelTypes[varModelType.get()]))
     win.mainloop()
 
 
@@ -676,7 +701,7 @@ def main():
     spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
     spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
     roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions.isXRD)  # Interactive region of interest (ROI) selection for fitting
-    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions.isXRD, setupOptions.isGeSnPL)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
+    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
 
 if __name__ == "__main__":
