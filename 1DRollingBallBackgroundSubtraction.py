@@ -686,9 +686,9 @@ def uiInput(win, setupOptions):
 
 
 def main():
-    setupOptions = get_setupOptions()
-    uiInput(Tk(), setupOptions)
-    rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # UI to get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    setupOptions = get_setupOptions()  # Read previously used setupOptions
+    uiInput(Tk(), setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # Read first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     if setupOptions.doBackgroundSubtraction:
         rollingBall = RollingBall()  # Initialize RollingBall object
