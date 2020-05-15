@@ -608,7 +608,6 @@ def show_GeSnPL(win, isGeSnPL):
 
 
 def get_setupOptions():
-    # TODO: Add reading from JSON file into a SetupOptions object, then initialize uiInput with that SetupOptions object
     try:
         with open('SetupOptionsJSON.txt') as infile:
             inputFile = json.load(infile)
@@ -619,7 +618,6 @@ def get_setupOptions():
 
 
 def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelType):
-    # TODO: Add storage to JSON file
     setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.darkFilePath = darkFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.isXRD = isXRD.get()
