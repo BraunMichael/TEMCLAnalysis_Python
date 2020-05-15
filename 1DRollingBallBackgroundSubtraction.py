@@ -132,7 +132,6 @@ def energyEVToWavelengthnm(energy):
 
 
 def calculateSnContentToEnergyEV(snContent):
-    assert snContent < 1, "This takes fraction, not percent Sn"
     # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
     a_param = 0.79931
     # a_param_uncertainty = 0.000269
@@ -141,6 +140,10 @@ def calculateSnContentToEnergyEV(snContent):
     c_param = 1.78112
     # c_param_uncertainty = 0.0588
     return a_param + b_param * snContent + c_param * snContent * snContent
+
+
+def calculateSnContentToWavelengthnm(snContent):
+    return energyEVToWavelengthnm(calculateSnContentToEnergyEV(snContent))
 
 
 def calculateEnergyEVToSnContent(energy):
@@ -152,6 +155,10 @@ def calculateEnergyEVToSnContent(energy):
     c_param = 0.07138
     # c_param_uncertainty = 0.00231
     return a_param + b_param * energy + c_param * energy * energy
+
+
+def calculateWavelengthnmToSnContent(wavelength):
+    return calculateEnergyEVToSnContent(wavelengthnmToEnergyEV(wavelength))
 
 
 def closestNumAndIndex(myList, myNumber):
@@ -237,14 +244,16 @@ def getData(fileName):
     return rawData, nakedRawFileName
 
 
-def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, plotYLabel: str, isXRD: bool, withTopAxis: bool = False):
+def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, plotYLabel: str, setupOptions: SetupOptions, withTopAxis: bool = False):
     fig.canvas.set_window_title(fileName + '_' + windowTitleSuffix)
+    print(plt.axis())
+    print(plt.gca().get_xlim())
     setAxisTicks(ax)
     if plotXLabel:
         ax.set_xlabel(plotXLabel)
     if plotYLabel:
         ax.set_ylabel(plotYLabel)
-    if isXRD:
+    if setupOptions.isXRD:
         if withTopAxis:
             secax = ax.secondary_xaxis('top', functions=(calculateXRDSnContent, calculateTwoTheta))
             secax.set_xlabel('Sn Content (%)')
@@ -254,23 +263,42 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
             secax = ax.secondary_xaxis('top', functions=(wavelengthnmToEnergyEV, energyEVToWavelengthnm))
             secax.set_xlabel('Energy (eV)')
             setAxisTicks(secax, True)
+            if setupOptions.isGeSnPL:
+                fig.subplots_adjust(top=0.8)
+
+                axGeSn = ax.twiny()
+                axGeSn.xaxis.set_ticks_position("top")  # may not need this
+                axGeSn.xaxis.set_label_position("top")  # may not need this
+                axGeSn.spines["top"].set_position(("axes", 1.15))
+                axGeSn.set_frame_on(True)
+                axGeSn.patch.set_visible(False)
+                for sp in axGeSn.spines.values():
+                    sp.set_visible(False)
+                axGeSn.spines["top"].set_visible(True)
+                axGeSn.set_xlabel('Sn Content (%)')
+                # axGeSn.set_ylim()
+                #
+                #     ax.secondary_xaxis('top', functions=(calculateWavelengthnmToSnContent, calculateSnContentToWavelengthnm))
+                # secaxGeSn.set_xlabel('Sn Content (%)')
+                # setAxisTicks(secaxGeSn, True)
 
 
-def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: RollingBall, isXRD: bool):
+def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: RollingBall, setupOptions: SetupOptions):
+    isXRD = setupOptions.isXRD
     rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)
     fig, ax = plt.subplots(figsize=(10, 8))
     if isXRD:
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange
     else:  # isPL
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange*10
         rollingBall.ratio = 1
     plt.subplots_adjust(bottom=0.25)
     ax.margins(x=0)
-    plt.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
-    background, = plt.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
-    subtracted, = plt.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
+    ax.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
+    background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
+    subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
     plt.legend(loc='best')
 
     axRadius = plt.axes([0.25, 0.05, 0.65, 0.03])
@@ -305,18 +333,18 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     plt.close()
 
 
-def fittingRegionSelectionPlotting(spectrumData: SpectrumData, isXRD: bool):
+def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: SetupOptions):
     # Each "region" limits the peak center position
     # Each MultiFit Area uses all the data in the selected area and tries to fit the regions within to the whole data,
     # Except the peak center of each region in the MultiFit area is limited to its selected region
     fig, ax = plt.subplots(figsize=(10, 8))
-    if isXRD:
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+    if setupOptions.isXRD:
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
 
     plt.subplots_adjust(bottom=0.2)
-    plt.plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
+    ax.plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
 
     class RangeSelect:
         def __init__(self):
@@ -520,16 +548,18 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
 
 
 def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, setupOptions: SetupOptions):
-    # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes https://matplotlib.org/examples/axes_grid/demo_parasite_axes2.html
+    # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes
+    #  like https://matplotlib.org/examples/pylab_examples/multiple_yaxis_with_spines.html
+    #  And possibly better: https://stackoverflow.com/questions/25159495/multiple-y-axis-conversion-scales
     isXRD = setupOptions.isXRD
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList, setupOptions.modelType[0])
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     if isXRD:
-        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
-        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='', setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
-        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', isXRD=isXRD, withTopAxis=True)
-        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='', isXRD=isXRD, withTopAxis=True)
+        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='', setupOptions=setupOptions, withTopAxis=True)
     axs[0].plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
     rawYmin, _ = axs[0].get_ylim()
     axs[1].plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
@@ -692,13 +722,13 @@ def main():
     spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     if setupOptions.doBackgroundSubtraction:
         rollingBall = RollingBall()  # Initialize RollingBall object
-        backgroundSubtractionPlotting(spectrumData, rollingBall, setupOptions.isXRD)  # Interactive rolling ball background subtraction
+        backgroundSubtractionPlotting(spectrumData, rollingBall, setupOptions)  # Interactive rolling ball background subtraction
         spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
     else:
         spectrumData.background = list(np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
     spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
     spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
-    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions.isXRD)  # Interactive region of interest (ROI) selection for fitting
+    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions)  # Interactive region of interest (ROI) selection for fitting
     snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
 
