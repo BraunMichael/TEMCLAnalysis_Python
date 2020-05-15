@@ -287,6 +287,12 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     isXRD = setupOptions.isXRD
     rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)
     fig, ax = plt.subplots(figsize=(10, 8))
+    plt.subplots_adjust(bottom=0.25)
+    ax.margins(x=0)
+    ax.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
+    background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
+    subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
+    plt.legend(loc='best')
     if isXRD:
         plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange
@@ -294,12 +300,6 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
         plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange*10
         rollingBall.ratio = 1
-    plt.subplots_adjust(bottom=0.25)
-    ax.margins(x=0)
-    ax.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
-    background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
-    subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
-    plt.legend(loc='best')
 
     axRadius = plt.axes([0.25, 0.05, 0.65, 0.03])
     axRatio = plt.axes([0.25, 0.10, 0.65, 0.03])
