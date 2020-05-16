@@ -138,34 +138,74 @@ def energyEVToWavelengthnm(energy):
     return (planck * speedOfLight * 10 ** 9) / energy
 
 
-def calculateSnContentToEnergyEV(snContent):
-    # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
-    a_param = 0.79931
-    # a_param_uncertainty = 0.000269
-    b_param = -3.17925
-    # b_param_uncertainty = 0.00874
-    c_param = 1.78112
-    # c_param_uncertainty = 0.0588
+def SnContent_To_IndirectConductionBandEnergy(snContent):
+    a_param = 0.71075
+    a_param_uncertainty = 0.00012944
+    b_param = -0.74189
+    b_param_uncertainty = 0.00416
+    c_param = 0.02276
+    c_param_uncertainty = 0.02697
     return a_param + b_param * snContent + c_param * snContent * snContent
 
 
-def calculateSnContentToWavelengthnm(snContent):
-    return energyEVToWavelengthnm(calculateSnContentToEnergyEV(snContent))
+def SnContent_To_ValenceBandEnergy(snContent):
+    a_param = 0.08927
+    a_param_uncertainty = 0.000275186
+    b_param = 1.21497
+    b_param_uncertainty = 0.00845
+    c_param = -0.98709
+    c_param_uncertainty = 0.05438
+    return a_param + b_param * snContent + c_param * snContent * snContent
 
 
-def calculateEnergyEVToSnContent(energy):
-    # From Fig 3 of https://journals.aps.org/prb/pdf/10.1103/PhysRevB.77.073202
-    a_param = 0.29475
-    # a_param_uncertainty = 0.000775
-    b_param = -0.42567
-    # b_param_uncertainty = 0.00272
-    c_param = 0.07138
-    # c_param_uncertainty = 0.00231
+def SnContent_To_DirectConductionBandEnergy(snContent):
+    a_param = 0.79704
+    a_param_uncertainty = 0.00039548
+    b_param = -1.63657
+    b_param_uncertainty = 0.01182
+    c_param = 0.46315
+    c_param_uncertainty = 0.07498
+    return a_param + b_param * snContent + c_param * snContent * snContent
+
+
+def SnContent_To_DirectBandgap(snContent):
+    return SnContent_To_DirectConductionBandEnergy(snContent) - SnContent_To_ValenceBandEnergy(snContent)
+
+
+def SnContent_To_IndirectBandgap(snContent):
+    return SnContent_To_IndirectConductionBandEnergy(snContent) - SnContent_To_ValenceBandEnergy(snContent)
+
+
+def SnContent_To_LowestBandgap(snContent):
+    if SnContent_To_DirectBandgap(snContent) < SnContent_To_IndirectBandgap(snContent):
+        return SnContent_To_DirectBandgap(snContent)
+    return SnContent_To_IndirectBandgap(snContent)
+
+
+def IndirectBandgap_To_SnContent(energy):
+    a_param = 0.29069
+    a_param_uncertainty = 0.0000544
+    b_param = -0.48176
+    b_param_uncertainty = 0.00038
+    c_param = 0.1022
+    c_param_uncertainty = 0.000544
     return a_param + b_param * energy + c_param * energy * energy
 
 
-def calculateWavelengthnmToSnContent(wavelength):
-    return calculateEnergyEVToSnContent(wavelengthnmToEnergyEV(wavelength))
+def DirectBandgap_To_SnContent(energy):
+    a_param = 0.3915
+    a_param_uncertainty = 0.0001498
+    b_param = -0.76635
+    b_param_uncertainty = 0.0008976
+    c_param = 0.22192
+    c_param_uncertainty = 0.0012
+    return a_param + b_param * energy + c_param * energy * energy
+
+
+def Bandgap_To_LowestSnContent(energy):
+    if DirectBandgap_To_SnContent(energy) < IndirectBandgap_To_SnContent(energy):
+        return DirectBandgap_To_SnContent(energy)
+    return IndirectBandgap_To_SnContent(energy)
 
 
 def closestNumAndIndex(myList, myNumber):
