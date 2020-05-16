@@ -253,8 +253,7 @@ def getData(fileName):
 
 def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, plotYLabel: str, setupOptions: SetupOptions, withTopAxis: bool = False):
     fig.canvas.set_window_title(fileName + '_' + windowTitleSuffix)
-    print(plt.axis())
-    print(plt.gca().get_xlim())
+
     setAxisTicks(ax)
     if plotXLabel:
         ax.set_xlabel(plotXLabel)
