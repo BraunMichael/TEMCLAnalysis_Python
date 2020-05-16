@@ -38,9 +38,10 @@ class RollingBall:
 
 class SpectrumData:
     def __init__(self, xVals: list = None, intensity: list = None, nakedFileName: str = ''):
-        self.xVals = np.array(xVals)
-        self.intensity = np.array(intensity)
-        self.lnIntensity = np.array(np.log(intensity))
+        dataSortInd = xVals.argsort()
+        self.xVals = xVals[dataSortInd]
+        self.intensity = intensity[dataSortInd]
+        self.lnIntensity = np.array(np.log(self.intensity))
         self.nakedFileName = nakedFileName
         self.numXVals = len(self.xVals)
         self.minX = min(self.xVals)
