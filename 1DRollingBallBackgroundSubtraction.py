@@ -306,8 +306,8 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
             setAxisTicks(secax, True)
     else:  # isPL
         if withTopAxis:
-            secax = ax.secondary_xaxis('top', functions=(wavelengthnmToEnergyEV, energyEVToWavelengthnm))
-            secax.set_xlabel('Energy (eV)')
+            secax = ax.secondary_xaxis('top', functions=(energyEVToWavelengthnm, wavelengthnmToEnergyEV))
+            secax.set_xlabel('Wavelength (nm)')
             setAxisTicks(secax, True)
             if setupOptions.isGeSnPL:
                 fig.subplots_adjust(top=0.8)
@@ -343,8 +343,9 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
         plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange
     else:  # isPL
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
-        rollingBall.radius = spectrumData.xRange*10
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Energy (eV)',
+                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        rollingBall.radius = spectrumData.xRange * 10
         rollingBall.ratio = 1
 
     axRadius = plt.axes([0.25, 0.05, 0.65, 0.03])
@@ -387,7 +388,8 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
     if setupOptions.isXRD:
         plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Energy (eV)',
+                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
 
     plt.subplots_adjust(bottom=0.2)
     ax.plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
@@ -604,8 +606,10 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
         plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='', setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
-        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
-        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Wavelength (nm)', plotYLabel='', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
+                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)', plotYLabel='',
+                  setupOptions=setupOptions, withTopAxis=True)
     axs[0].plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
     rawYmin, _ = axs[0].get_ylim()
     axs[1].plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
@@ -765,7 +769,10 @@ def main():
     setupOptions = get_setupOptions()  # Read previously used setupOptions
     uiInput(Tk(), setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # Read first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
-    spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
+    if setupOptions.isXRD:
+        spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
+    else:  # Convert wavelength to nm
+        spectrumData = SpectrumData(wavelengthnmToEnergyEV(rawData[0]), rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     if setupOptions.doBackgroundSubtraction:
         rollingBall = RollingBall()  # Initialize RollingBall object
         backgroundSubtractionPlotting(spectrumData, rollingBall, setupOptions)  # Interactive rolling ball background subtraction
