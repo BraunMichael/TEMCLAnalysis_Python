@@ -66,12 +66,12 @@ SMALL_SIZE = 18
 MEDIUM_SIZE = 20
 BIGGER_SIZE = 22
 
-plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
-plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('font', size=SMALL_SIZE)  # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)  # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
@@ -85,7 +85,7 @@ def calculateXRDSnContent(twoTheta):
     l = 3
     hkl = [h, k, l]
     h2k2l2 = np.sum(np.square(hkl))
-    aSample = np.sqrt((dSample**2) * h2k2l2)
+    aSample = np.sqrt((dSample ** 2) * h2k2l2)
     snContentPercent = 100 * (aSample - aGe) / (aSn - aGe)
     return snContentPercent
 
@@ -105,7 +105,7 @@ def calculateXRDSnContent_Zach(doubletheta_GeSn):
     d333_GeSn = wavelength / 2 / math.sin(theta_GeSn * math.pi / 180)
 
     x = (d333_GeSn - d333_Ge) / (d333_DC_Sn - d333_Ge)
-    return x*100
+    return x * 100
 
 
 def calculateTwoTheta(snContentPercent=0):
@@ -117,8 +117,8 @@ def calculateTwoTheta(snContentPercent=0):
     l = 3
     hkl = [h, k, l]
     h2k2l2 = np.sum(np.square(hkl))
-    aSample = aGe + ((snContentPercent/100) * (aSn - aGe))
-    twoTheta = 2 * np.rad2deg(np.arcsin(0.5 * (wavelength / np.sqrt(aSample**2 / h2k2l2))))
+    aSample = aGe + ((snContentPercent / 100) * (aSn - aGe))
+    twoTheta = 2 * np.rad2deg(np.arcsin(0.5 * (wavelength / np.sqrt(aSample ** 2 / h2k2l2))))
     return twoTheta
 
 
@@ -246,7 +246,8 @@ def readDataFile(xrdFileNameFunc):
     intensityList = []
     delimiters = ' ', ',', ', ', '\t', '\n'
     regexPattern = '|'.join(map(re.escape, delimiters))
-    with open(xrdFileNameFunc, 'r') as file:
+
+    with open(xrdFileNameFunc, 'r', encoding='ascii', errors='surrogateescape') as file:
         for line in file:
             splitLine = re.split(regexPattern, line)
             if all([is_number(splitLine[0]), is_number(splitLine[1])]):
@@ -258,22 +259,25 @@ def readDataFile(xrdFileNameFunc):
 def calculateSingleBackground(measuredAngles, lnIntensities, angleNum, radiussquared, rollingBallRatioVal):
     centerAngle = measuredAngles[angleNum]
     centerIntensity = lnIntensities[angleNum]
-    ballPoints = centerIntensity + rollingBallRatioVal*np.sqrt(radiussquared - ((measuredAngles - centerAngle) * (measuredAngles - centerAngle)))
+    ballPoints = centerIntensity + rollingBallRatioVal * np.sqrt(
+        radiussquared - ((measuredAngles - centerAngle) * (measuredAngles - centerAngle)))
     backgroundDifference = ballPoints - lnIntensities
     backgroundOffset = np.nanmax(backgroundDifference)
     return ballPoints - backgroundOffset
 
 
 def rollingBallBackground(spectrumData: SpectrumData, rollingBallRatioVal, radius):
-    radiussquared = radius*radius
-    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, spectrumData.lnIntensity, angleNum, radiussquared, rollingBallRatioVal) for angleNum in range(spectrumData.numXVals)]
+    radiussquared = radius * radius
+    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, spectrumData.lnIntensity, angleNum, radiussquared,
+                                                rollingBallRatioVal) for angleNum in range(spectrumData.numXVals)]
     return np.nanmax(allBackgrounds, axis=0)
 
 
 def setAxisTicks(axisHandle, secondaryAxis=False):
     axisHandle.minorticks_on()
     if secondaryAxis:
-        axisHandle.tick_params(which='both', axis='both', direction='in', top=True, bottom=False, left=False, right=False)
+        axisHandle.tick_params(which='both', axis='both', direction='in', top=True, bottom=False, left=False,
+                               right=False)
     else:
         axisHandle.tick_params(which='both', axis='both', direction='in', top=False, bottom=True, left=True, right=True)
     axisHandle.tick_params(which='major', axis='both', direction='in', length=8, width=1)
@@ -291,7 +295,8 @@ def getData(fileName):
     return rawData, nakedRawFileName
 
 
-def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, plotYLabel: str, setupOptions: SetupOptions, withTopAxis: bool = False):
+def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, plotYLabel: str,
+              setupOptions: SetupOptions, withTopAxis: bool = False):
     fig.canvas.set_window_title(fileName + '_' + windowTitleSuffix)
 
     setAxisTicks(ax)
@@ -339,10 +344,12 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     ax.margins(x=0)
     ax.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
     background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
-    subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b', label="Background Subtracted")
+    subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b',
+                          label="Background Subtracted")
     plt.legend(loc='best')
     if isXRD:
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$',
+                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange
     else:  # isPL
         plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Energy (eV)',
@@ -366,8 +373,8 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     sRatio.valtext.set_text(rollingBall.ratio)
 
     def update(val):
-        sRadius.valtext.set_text('{:.1f}'.format(10**sRadius.val))
-        sRatio.valtext.set_text('{:.1f}'.format(10**sRatio.val))
+        sRadius.valtext.set_text('{:.1f}'.format(10 ** sRadius.val))
+        sRatio.valtext.set_text('{:.1f}'.format(10 ** sRatio.val))
         rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val)
         background.set_ydata(rollingBallBackgroundDataUpdate)
         subtracted.set_ydata(spectrumData.lnIntensity - rollingBallBackgroundDataUpdate)
@@ -377,8 +384,8 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     sRatio.on_changed(update)
 
     plt.show(block=True)
-    rollingBall.radius = 10**sRadius.val
-    rollingBall.ratio = 10**sRatio.val
+    rollingBall.radius = 10 ** sRadius.val
+    rollingBall.ratio = 10 ** sRatio.val
     plt.close()
 
 
@@ -388,7 +395,8 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
     # Except the peak center of each region in the MultiFit area is limited to its selected region
     fig, ax = plt.subplots(figsize=(10, 8))
     if setupOptions.isXRD:
-        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$',
+                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
         plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Energy (eV)',
                   plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
@@ -462,7 +470,8 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
         multiFitRegionSet = set(multiFitRegion['x'])
         for subMultiIndex, subMultiFitRegion in enumerate(multiRegionCoordsList):
             if multiIndex != subMultiIndex:
-                assert not multiFitRegionSet.isdisjoint(subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
+                assert not multiFitRegionSet.isdisjoint(
+                    subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
     return coordsList, multiRegionCoordsList
 
 
@@ -496,7 +505,7 @@ def prepareFittingModels(roiCoordsList, modelType):
 
             individualModelsList.append(mod)
             pars = mod.guess(selectedYVals, x=selectedXVals, negative=False)
-            pars[prefixName+'center'].set(min=min(selectedXVals), max=max(selectedXVals))
+            pars[prefixName + 'center'].set(min=min(selectedXVals), max=max(selectedXVals))
             pars[prefixName + 'amplitude'].set(min=0)
             pars[prefixName + 'sigma'].set(min=0)
             if modelType.lower() == 'voigt':
@@ -532,8 +541,9 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList, modelType: str):
             coordsList.append(multiRegion)
             # Be careful not to mess up indices of list while trying to delete based on index!
             for index in sorted(indicesToDelete, reverse=True):
-                del(roiCoordsList[index])
-        combinedModelsList.extend(roiCoordsList)  # After removing any entries in a MultiFit Area, add the rest of them onto the model list
+                del (roiCoordsList[index])
+        combinedModelsList.extend(
+            roiCoordsList)  # After removing any entries in a MultiFit Area, add the rest of them onto the model list
         coordsList.extend(roiCoordsList)
     else:
         combinedModelsList = roiCoordsList
@@ -598,16 +608,20 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
             an1.draggable()
 
 
-def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list, setupOptions: SetupOptions):
+def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list,
+                             setupOptions: SetupOptions):
     # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes
     #  like https://matplotlib.org/examples/pylab_examples/multiple_yaxis_with_spines.html
     #  And possibly better: https://stackoverflow.com/questions/25159495/multiple-y-axis-conversion-scales
     isXRD = setupOptions.isXRD
-    (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList, setupOptions.modelType[0])
+    (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList,
+                                                                    setupOptions.modelType[0])
     fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
     if isXRD:
-        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
-        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$',
+                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='',
+                  setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
         plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
                   plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
@@ -649,7 +663,8 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     plt.close()
 
 
-def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file', fileTypes: str = None, initialDirOrFile: str = os.getcwd()):
+def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file', fileTypes: str = None,
+                     initialDirOrFile: str = os.getcwd()):
     if os.path.isfile(initialDirOrFile) or os.path.isdir(initialDirOrFile):
         initialDir = os.path.split(initialDirOrFile)[0]
     else:
@@ -658,7 +673,8 @@ def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file'
     root.withdraw()
     assert fileOrFolder.lower() == 'file' or fileOrFolder.lower() == 'folder', "Only file or folder is an allowed string choice for fileOrFolder"
     if fileOrFolder.lower() == 'file':
-        fileOrFolderList = filedialog.askopenfilename(initialdir=initialDir, title=titleStr, filetypes=[(fileTypes + "file", fileTypes)])
+        fileOrFolderList = filedialog.askopenfilename(initialdir=initialDir, title=titleStr,
+                                                      filetypes=[(fileTypes + "file", fileTypes)])
     else:  # Must be folder from assert statement
         fileOrFolderList = filedialog.askdirectory(initialdir=initialDir, title=titleStr)
     if not fileOrFolderList:
@@ -668,7 +684,8 @@ def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file'
 
 
 def get_file(entryField, entryFieldText, titleMessage):
-    listName = getFileOrDirList('file', titleMessage, '.txt .xy .csv .dat', entryFieldText.get().replace('~', os.path.expanduser('~')))
+    listName = getFileOrDirList('file', titleMessage, '.txt .xy .csv .dat',
+                                entryFieldText.get().replace('~', os.path.expanduser('~')))
     entryFieldText.set(listName.replace(os.path.expanduser('~'), '~'))
     entryField.config(width=len(listName.replace(os.path.expanduser('~'), '~')))
 
@@ -700,7 +717,8 @@ def get_setupOptions():
     return setupOptions
 
 
-def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelType):
+def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL,
+               modelType):
     setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.darkFilePath = darkFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.isXRD = isXRD.get()
@@ -725,20 +743,23 @@ def uiInput(win, setupOptions):
     dataFileEntry = tkinter.Entry(win, textvariable=dataFileEntryText)
     dataFileEntry.grid(row=1, column=0)
     dataFileEntry.config(width=len(setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~')))
-    dataFileButton = tkinter.Button(win, text='Choose File', command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File'))
+    dataFileButton = tkinter.Button(win, text='Choose File',
+                                    command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File'))
     dataFileButton.grid(row=1, column=1)
 
     tkinter.Label(win, text="Dark File:").grid(row=2, column=0)
     darkFileEntry = tkinter.Entry(win, textvariable=darkFileEntryText)
     darkFileEntry.grid(row=3, column=0)
     dataFileEntry.config(width=len(setupOptions.darkFilePath.replace(os.path.expanduser('~'), '~')))
-    darkFileButton = tkinter.Button(win, text='Choose File', command=lambda: get_file(darkFileEntry, darkFileEntryText, 'Choose Dark Scan File'))
+    darkFileButton = tkinter.Button(win, text='Choose File',
+                                    command=lambda: get_file(darkFileEntry, darkFileEntryText, 'Choose Dark Scan File'))
     darkFileButton.grid(row=3, column=1)
 
     item_Label = tkinter.Label(win, text="XRD or PL/CL")
     item_Label.grid(row=4, column=0)
     r1isXRD = tkinter.Radiobutton(win, text="XRD", variable=isXRD, value=1, command=lambda: hide_GeSnPL(win))
-    r2isXRD = tkinter.Radiobutton(win, text="PL/CL", variable=isXRD, value=0, command=lambda: show_GeSnPL(win, isGeSnPL))
+    r2isXRD = tkinter.Radiobutton(win, text="PL/CL", variable=isXRD, value=0,
+                                  command=lambda: show_GeSnPL(win, isGeSnPL))
     r1isXRD.grid(row=4, column=1)
     r2isXRD.grid(row=4, column=2)
 
@@ -764,7 +785,9 @@ def uiInput(win, setupOptions):
         hide_GeSnPL(win)
     else:
         show_GeSnPL(win, isGeSnPL)
-    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelTypes[varModelType.get()]))
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD,
+                                                        doBackgroundSubtraction, isGeSnPL,
+                                                        modelTypes[varModelType.get()]))
     win.mainloop()
 
 
