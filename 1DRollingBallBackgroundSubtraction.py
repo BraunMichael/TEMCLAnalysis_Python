@@ -315,6 +315,7 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
             secax.set_xlabel('Wavelength (nm)')
             setAxisTicks(secax, True)
             if setupOptions.isGeSnPL:
+                pass
                 # TODO: This doesn't really work right now, see comments below assertion statement
                 # fig.subplots_adjust(top=0.8)
                 #
@@ -329,7 +330,10 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
                 # axGeSn.spines["top"].set_visible(True)
                 # axGeSn.set_xlabel('Sn Content (%)')
                 # axXmin, axXmax = ax.get_xlim()
-                assert axXmax < 1.5, "The data you are trying to plot is probably no GeSn PL/CL as your maximum energy ({0} eV) is > 1.5 eV".format(round(axXmax, 3))
+                # assert axXmax < 1.5, "The data you are trying to plot is probably no GeSn PL/CL as your maximum energy ({0} eV) is > 1.5 eV".format(round(axXmax, 3))
+                # A possible option: https://matplotlib.org/3.1.0/gallery/scales/custom_scale.html
+                # Related: https://stackoverflow.com/questions/14845350/multiple-x-axis-which-are-nonlinear-to-each-other
+                # And: https://matplotlib.org/3.1.0/gallery/scales/scales.html
                 # This is also basically broken, scaling changes based on starting x axis range...
                 # axGeSn.set_xlim(DirectBandgap_To_SnContent(axXmin), DirectBandgap_To_SnContent(axXmax))
                 # Doesn't work, has issues with non-monotonic functions, but is probably better if we can fix it...
