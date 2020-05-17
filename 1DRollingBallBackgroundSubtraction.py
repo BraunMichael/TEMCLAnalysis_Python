@@ -613,9 +613,6 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
 
 def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list,
                              setupOptions: SetupOptions):
-    # TODO: Maybe implement this if isGeSnPL from UI, as a 2nd top axis to show wavelength, energy, and Sn content on the same axes
-    #  like https://matplotlib.org/examples/pylab_examples/multiple_yaxis_with_spines.html
-    #  And possibly better: https://stackoverflow.com/questions/25159495/multiple-y-axis-conversion-scales
     isXRD = setupOptions.isXRD
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList,
                                                                     setupOptions.modelType[0])
