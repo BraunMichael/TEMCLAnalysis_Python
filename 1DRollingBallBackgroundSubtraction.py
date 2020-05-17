@@ -474,8 +474,7 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
         multiFitRegionSet = set(multiFitRegion['x'])
         for subMultiIndex, subMultiFitRegion in enumerate(multiRegionCoordsList):
             if multiIndex != subMultiIndex:
-                assert not multiFitRegionSet.isdisjoint(
-                    subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
+                assert multiFitRegionSet.isdisjoint(subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
     return coordsList, multiRegionCoordsList
 
 
