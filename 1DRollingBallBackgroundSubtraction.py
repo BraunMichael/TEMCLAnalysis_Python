@@ -592,19 +592,19 @@ def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
 
 def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
     if isGeSnPL:
-        for centerWavelength in np.asarray(centerXValsList):
-            # TODO: Update this with new equations
-            snContent = round(calculateEnergyEVToSnContent(centerWavelength), 1)
-            print("Sn Composition:", snContent)
-            _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerWavelength)
-            an0 = axs[0].annotate(str(abs(snContent)),
-                                  xy=(centerWavelength, spectrumData.lnIntensity[centerIndex]),
+        for centerEnergy in np.asarray(centerXValsList):
+            directSnContent = max(round(100 * DirectBandgap_To_SnContent(centerEnergy), 1), 0)
+            indirectSnContent = max(round(100 * IndirectBandgap_To_SnContent(centerEnergy), 1), 0)
+            print("Sn Composition - Direct: ", directSnContent, " Indirect: ", indirectSnContent)
+            _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerEnergy)
+            an0 = axs[0].annotate(str(directSnContent) + ", " + str(indirectSnContent),
+                                  xy=(centerEnergy, spectrumData.lnIntensity[centerIndex]),
                                   xycoords='data', xytext=(0, 72), textcoords='offset points',
                                   arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                   patchB=None))
             an0.draggable()
-            an1 = axs[1].annotate(str(abs(snContent)),
-                                  xy=(centerWavelength, spectrumData.bgSubIntensity[centerIndex]),
+            an1 = axs[1].annotate(str(directSnContent) + ", " + str(indirectSnContent),
+                                  xy=(centerEnergy, spectrumData.bgSubIntensity[centerIndex]),
                                   xycoords='data', xytext=(0, 72), textcoords='offset points',
                                   arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                   patchB=None))
