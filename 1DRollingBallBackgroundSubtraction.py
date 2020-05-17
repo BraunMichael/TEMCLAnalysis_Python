@@ -310,23 +310,25 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
             secax.set_xlabel('Wavelength (nm)')
             setAxisTicks(secax, True)
             if setupOptions.isGeSnPL:
-                fig.subplots_adjust(top=0.8)
-
-                axGeSn = ax.twiny()
-                axGeSn.xaxis.set_ticks_position("top")  # may not need this
-                axGeSn.xaxis.set_label_position("top")  # may not need this
-                axGeSn.spines["top"].set_position(("axes", 1.15))
-                axGeSn.set_frame_on(True)
-                axGeSn.patch.set_visible(False)
-                for sp in axGeSn.spines.values():
-                    sp.set_visible(False)
-                axGeSn.spines["top"].set_visible(True)
-                axGeSn.set_xlabel('Sn Content (%)')
-                # axGeSn.set_ylim()
+                # TODO: This doesn't really work right now, see comments below assertion statement
+                # fig.subplots_adjust(top=0.8)
                 #
-                #     ax.secondary_xaxis('top', functions=(calculateWavelengthnmToSnContent, calculateSnContentToWavelengthnm))
-                # secaxGeSn.set_xlabel('Sn Content (%)')
-                # setAxisTicks(secaxGeSn, True)
+                # axGeSn = ax.twiny()
+                # axGeSn.xaxis.set_ticks_position("top")  # may not need this
+                # axGeSn.xaxis.set_label_position("top")  # may not need this
+                # axGeSn.spines["top"].set_position(("axes", 1.15))
+                # axGeSn.set_frame_on(True)
+                # axGeSn.patch.set_visible(False)
+                # for sp in axGeSn.spines.values():
+                #     sp.set_visible(False)
+                # axGeSn.spines["top"].set_visible(True)
+                # axGeSn.set_xlabel('Sn Content (%)')
+                # axXmin, axXmax = ax.get_xlim()
+                assert axXmax < 1.5, "The data you are trying to plot is probably no GeSn PL/CL as your maximum energy ({0} eV) is > 1.5 eV".format(round(axXmax, 3))
+                # This is also basically broken, scaling changes based on starting x axis range...
+                # axGeSn.set_xlim(DirectBandgap_To_SnContent(axXmin), DirectBandgap_To_SnContent(axXmax))
+                # Doesn't work, has issues with non-monotonic functions, but is probably better if we can fix it...
+                # axGeSn.set_xscale('function', functions=(DirectBandgap_To_SnContent, SnContent_To_DirectBandgap))
 
 
 def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: RollingBall, setupOptions: SetupOptions):
@@ -578,6 +580,7 @@ def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
 def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
     if isGeSnPL:
         for centerWavelength in np.asarray(centerXValsList):
+            # TODO: Update this with new equations
             snContent = round(calculateEnergyEVToSnContent(centerWavelength), 1)
             print("Sn Composition:", snContent)
             _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerWavelength)
