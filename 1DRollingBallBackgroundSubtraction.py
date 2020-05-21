@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Slider, SpanSelector, Button
 from matplotlib.ticker import AutoMinorLocator
-from lmfit.models import GaussianModel, PseudoVoigtModel, VoigtModel, LorentzianModel
+from lmfit.models import GaussianModel, PseudoVoigtModel, VoigtModel, LorentzianModel, Pearson7Model
 from bisect import bisect_left
 
 planck = 4.135667696 * (10 ** -15)  # eV * s
@@ -503,8 +503,8 @@ def prepareFittingModels(roiCoordsList, modelType):
                 mod = LorentzianModel(prefix=prefixName)
             elif modelType.lower() == 'gaussian':
                 mod = GaussianModel(prefix=prefixName)
-            else:
-                assert True, "Entered model type is not supported"
+            elif modelType.lower() == 'pearsonvii':
+                mod = Pearson7Model(prefix=prefixName)
 
             individualModelsList.append(mod)
             pars = mod.guess(selectedYVals, x=selectedXVals, negative=False)
@@ -770,7 +770,7 @@ def uiInput(win, setupOptions):
     r1doBgSub.grid(row=5, column=1)
     r2doBgSub.grid(row=5, column=2)
 
-    modelTypes = [("Gaussian", 0), ("Voigt", 1), ("Psuedovoigt", 2), ("Lorentzian", 3)]
+    modelTypes = [("Gaussian", 0), ("Voigt", 1), ("Psuedovoigt", 2), ("Lorentzian", 3), ("PearsonVII", 4)]
 
     varModelType = tkinter.IntVar()
     varModelType.set(setupOptions.modelType[1])
