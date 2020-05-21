@@ -494,6 +494,7 @@ def prepareFittingModels(roiCoordsList, modelType):
             selectedXVals = entry['x']
             selectedYVals = np.exp(entry['y'])
 
+            mod = None
             if modelType.lower() == 'voigt':
                 mod = VoigtModel(prefix=prefixName)
             elif modelType.lower() == 'psuedovoigt':
@@ -505,6 +506,7 @@ def prepareFittingModels(roiCoordsList, modelType):
             elif modelType.lower() == 'pearsonvii':
                 mod = Pearson7Model(prefix=prefixName)
 
+            assert mod, "Entered model type is not supported"
             individualModelsList.append(mod)
             pars = mod.guess(selectedYVals, x=selectedXVals, negative=False)
             pars[prefixName + 'center'].set(min=min(selectedXVals), max=max(selectedXVals))
@@ -711,7 +713,7 @@ def get_setupOptions():
         with open('SetupOptionsJSON.txt') as infile:
             inputFile = json.load(infile)
         setupOptions = jsonpickle.decode(inputFile)
-    except:
+    except FileNotFoundError:
         setupOptions = SetupOptions()
     return setupOptions
 
