@@ -140,31 +140,31 @@ def energyEVToWavelengthnm(energy):
 
 def SnContent_To_IndirectConductionBandEnergy(snContent):
     a_param = 0.71075
-    a_param_uncertainty = 0.00012944
+    # a_param_uncertainty = 0.00012944
     b_param = -0.74189
-    b_param_uncertainty = 0.00416
+    # b_param_uncertainty = 0.00416
     c_param = 0.02276
-    c_param_uncertainty = 0.02697
+    # c_param_uncertainty = 0.02697
     return a_param + b_param * snContent + c_param * snContent * snContent
 
 
 def SnContent_To_ValenceBandEnergy(snContent):
     a_param = 0.08927
-    a_param_uncertainty = 0.000275186
+    # a_param_uncertainty = 0.000275186
     b_param = 1.21497
-    b_param_uncertainty = 0.00845
+    # b_param_uncertainty = 0.00845
     c_param = -0.98709
-    c_param_uncertainty = 0.05438
+    # c_param_uncertainty = 0.05438
     return a_param + b_param * snContent + c_param * snContent * snContent
 
 
 def SnContent_To_DirectConductionBandEnergy(snContent):
     a_param = 0.79704
-    a_param_uncertainty = 0.00039548
+    # a_param_uncertainty = 0.00039548
     b_param = -1.63657
-    b_param_uncertainty = 0.01182
+    # b_param_uncertainty = 0.01182
     c_param = 0.46315
-    c_param_uncertainty = 0.07498
+    # c_param_uncertainty = 0.07498
     return a_param + b_param * snContent + c_param * snContent * snContent
 
 
@@ -184,21 +184,21 @@ def SnContent_To_LowestBandgap(snContent):
 
 def IndirectBandgap_To_SnContent(energy):
     a_param = 0.29069
-    a_param_uncertainty = 0.0000544
+    # a_param_uncertainty = 0.0000544
     b_param = -0.48176
-    b_param_uncertainty = 0.00038
+    # b_param_uncertainty = 0.00038
     c_param = 0.1022
-    c_param_uncertainty = 0.000544
+    # c_param_uncertainty = 0.000544
     return a_param + b_param * energy + c_param * energy * energy
 
 
 def DirectBandgap_To_SnContent(energy):
     a_param = 0.3915
-    a_param_uncertainty = 0.0001498
+    # a_param_uncertainty = 0.0001498
     b_param = -0.76635
-    b_param_uncertainty = 0.0008976
+    # b_param_uncertainty = 0.0008976
     c_param = 0.22192
-    c_param_uncertainty = 0.0012
+    # c_param_uncertainty = 0.0012
     return a_param + b_param * energy + c_param * energy * energy
 
 
@@ -376,7 +376,7 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     sRadius.valtext.set_text(rollingBall.radius)
     sRatio.valtext.set_text(rollingBall.ratio)
 
-    def update(val):
+    def update(_):
         sRadius.valtext.set_text('{:.1f}'.format(10 ** sRadius.val))
         sRatio.valtext.set_text('{:.1f}'.format(10 ** sRatio.val))
         rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val)
@@ -409,8 +409,9 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
     ax.plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
 
     class RangeSelect:
-        def __init__(self):
+        def __init__(self, numRanges):
             self.coords = {}
+            self.numRanges = numRanges
 
         def __call__(self, xmin, xmax):
             indmin, indmax = np.searchsorted(spectrumData.xVals, (xmin, xmax))
@@ -421,7 +422,7 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
             self.coords['x'] = thisx
             self.coords['y'] = thisy
             (ymin, ymax) = ax.get_ylim()
-            if len(ax.patches) > numRanges:
+            if len(ax.patches) > self.numRanges:
                 ax.patches[-1].remove()
             if len(thisx) == 0:
                 thisx = [0]
@@ -431,30 +432,29 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
             fig.canvas.draw()
 
     plt.show(block=False)
-    rangeselect = RangeSelect()
+    rangeselect = RangeSelect(1)
     coordsList = []
     multiRegionCoordsList = []
 
     class Index(object):
-        index = 1
+        def __init__(self):
+            self.index = 0
 
-        def addRegion(self, event):
+        def addRegion(self, _):
             self.index += 1
-            numRanges = self.index
+            rangeselect.numRanges = self.index
             coordsList.append(rangeselect.coords.copy())
             ax.patches[-1].set_facecolor('green')
-            span = SpanSelector(ax, rangeselect, 'horizontal', useblit=False,
-                                rectprops=dict(alpha=0.3, facecolor='red'))
+            _ = SpanSelector(ax, rangeselect, 'horizontal', useblit=False, rectprops=dict(alpha=0.3, facecolor='red'))
             plt.draw()
 
-        def addMultiFitRegion(self, event):
+        def addMultiFitRegion(self, _):
             self.index += 1
-            numRanges = self.index
+            rangeselect.numRanges = self.index
             multiRegionCoordsList.append(rangeselect.coords.copy())
             ax.patches[-1].set_facecolor('blue')
             ax.patches[-1].set_alpha(0.2)
-            span = SpanSelector(ax, rangeselect, 'horizontal', useblit=False,
-                                rectprops=dict(alpha=0.3, facecolor='red'))
+            _ = SpanSelector(ax, rangeselect, 'horizontal', useblit=False, rectprops=dict(alpha=0.3, facecolor='red'))
             plt.draw()
 
     callback = Index()
@@ -462,8 +462,7 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
     bAdd = Button(axAddRegion, 'Add Region')
     axAddRegion = plt.axes([0.45, 0.02, 0.2, 0.075])
     bMulti = Button(axAddRegion, 'MultiFit Area')
-    numRanges = 1
-    span = SpanSelector(ax, rangeselect, 'horizontal', useblit=False, rectprops=dict(alpha=0.3, facecolor='red'))
+    _ = SpanSelector(ax, rangeselect, 'horizontal', useblit=False, rectprops=dict(alpha=0.3, facecolor='red'))
     bAdd.on_clicked(callback.addRegion)
     bMulti.on_clicked(callback.addMultiFitRegion)
 
