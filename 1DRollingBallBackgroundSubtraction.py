@@ -371,8 +371,10 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     else:
         rollingBall.minimumRadius = 10 ** np.floor(log10xRangeBasis)
         rollingBall.maximumRadius = 10 ** (np.ceil(log10xRangeBasis) + 2)
-    sRadius = Slider(axRadius, 'Rolling Ball Radius', np.log10(rollingBall.minimumRadius), np.log10(rollingBall.maximumRadius), valinit=np.log10(rollingBall.radius))
-    sRatio = Slider(axRatio, 'Aspect Ratio', np.log10(rollingBall.minimumRatio), np.log10(rollingBall.maximumRatio), valinit=np.log10(rollingBall.ratio))
+    sRadius = Slider(axRadius, 'Rolling Ball Radius', np.log10(rollingBall.minimumRadius),
+                     np.log10(rollingBall.maximumRadius), valinit=np.log10(rollingBall.radius))
+    sRatio = Slider(axRatio, 'Aspect Ratio', np.log10(rollingBall.minimumRatio), np.log10(rollingBall.maximumRatio),
+                    valinit=np.log10(rollingBall.ratio))
     sRadius.valtext.set_text(rollingBall.radius)
     sRatio.valtext.set_text(rollingBall.ratio)
 
@@ -426,8 +428,7 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
                 ax.patches[-1].remove()
             if len(thisx) == 0:
                 thisx = [0]
-            rect = patches.Rectangle((min(thisx), ymin), max(thisx) - min(thisx), ymax - ymin, linewidth=1,
-                                     edgecolor='none', facecolor='red', alpha=0.5, fill=True)
+            rect = patches.Rectangle((min(thisx), ymin), max(thisx) - min(thisx), ymax - ymin, linewidth=1, edgecolor='none', facecolor='red', alpha=0.5, fill=True)
             ax.add_patch(rect)
             fig.canvas.draw()
 
@@ -473,7 +474,8 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
         multiFitRegionSet = set(multiFitRegion['x'])
         for subMultiIndex, subMultiFitRegion in enumerate(multiRegionCoordsList):
             if multiIndex != subMultiIndex:
-                assert multiFitRegionSet.isdisjoint(subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
+                assert multiFitRegionSet.isdisjoint(
+                    subMultiFitRegion['x']), "You have selected overlapping MultiFit areas, this is not allowed."
     return coordsList, multiRegionCoordsList
 
 
@@ -794,22 +796,32 @@ def uiInput(win, setupOptions):
 
 def main():
     setupOptions = get_setupOptions()  # Read previously used setupOptions
-    uiInput(Tk(), setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
-    rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # Read first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    uiInput(Tk(),
+            setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    rawData, nakedRawFileName = getData(
+        setupOptions.dataFilePath)  # Read first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     if setupOptions.isXRD:
-        spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
+        spectrumData = SpectrumData(rawData[0], rawData[1],
+                                    nakedRawFileName)  # Make SpectrumData object and store data in it
     else:  # Convert wavelength to nm
-        spectrumData = SpectrumData(wavelengthnmToEnergyEV(rawData[0]), rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
+        spectrumData = SpectrumData(wavelengthnmToEnergyEV(rawData[0]), rawData[1],
+                                    nakedRawFileName)  # Make SpectrumData object and store data in it
     if setupOptions.doBackgroundSubtraction:
         rollingBall = RollingBall()  # Initialize RollingBall object
-        backgroundSubtractionPlotting(spectrumData, rollingBall, setupOptions)  # Interactive rolling ball background subtraction
-        spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
+        backgroundSubtractionPlotting(spectrumData, rollingBall,
+                                      setupOptions)  # Interactive rolling ball background subtraction
+        spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio,
+                                                        rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
     else:
-        spectrumData.background = list(np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
+        spectrumData.background = list(
+            np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
     spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
-    spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
-    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions)  # Interactive region of interest (ROI) selection for fitting
-    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
+    spectrumData.expBgSubIntensity = np.exp(
+        spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
+    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData,
+                                                                          setupOptions)  # Interactive region of interest (ROI) selection for fitting
+    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList,
+                             setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
 
 if __name__ == "__main__":
