@@ -548,8 +548,7 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList, modelType: str):
             # Be careful not to mess up indices of list while trying to delete based on index!
             for index in sorted(indicesToDelete, reverse=True):
                 del (roiCoordsList[index])
-        combinedModelsList.extend(
-            roiCoordsList)  # After removing any entries in a MultiFit Area, add the rest of them onto the model list
+        combinedModelsList.extend(roiCoordsList)  # After removing any entries in a MultiFit Area, add the rest of them onto the model list
         coordsList.extend(roiCoordsList)
     else:
         combinedModelsList = roiCoordsList
@@ -788,40 +787,28 @@ def uiInput(win, setupOptions):
         hide_GeSnPL(win)
     else:
         show_GeSnPL(win, isGeSnPL)
-    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD,
-                                                        doBackgroundSubtraction, isGeSnPL,
-                                                        modelTypes[varModelType.get()]))
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelTypes[varModelType.get()]))
     win.mainloop()
 
 
 def main():
     setupOptions = get_setupOptions()  # Read previously used setupOptions
-    uiInput(Tk(),
-            setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
-    rawData, nakedRawFileName = getData(
-        setupOptions.dataFilePath)  # Read first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    uiInput(Tk(), setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
+    rawData, nakedRawFileName = getData(setupOptions.dataFilePath)  # Read first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
     if setupOptions.isXRD:
-        spectrumData = SpectrumData(rawData[0], rawData[1],
-                                    nakedRawFileName)  # Make SpectrumData object and store data in it
+        spectrumData = SpectrumData(rawData[0], rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     else:  # Convert wavelength to nm
-        spectrumData = SpectrumData(wavelengthnmToEnergyEV(rawData[0]), rawData[1],
-                                    nakedRawFileName)  # Make SpectrumData object and store data in it
+        spectrumData = SpectrumData(wavelengthnmToEnergyEV(rawData[0]), rawData[1], nakedRawFileName)  # Make SpectrumData object and store data in it
     if setupOptions.doBackgroundSubtraction:
         rollingBall = RollingBall()  # Initialize RollingBall object
-        backgroundSubtractionPlotting(spectrumData, rollingBall,
-                                      setupOptions)  # Interactive rolling ball background subtraction
-        spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio,
-                                                        rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
+        backgroundSubtractionPlotting(spectrumData, rollingBall, setupOptions)  # Interactive rolling ball background subtraction
+        spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
     else:
-        spectrumData.background = list(
-            np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
+        spectrumData.background = list(np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
     spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
-    spectrumData.expBgSubIntensity = np.exp(
-        spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
-    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData,
-                                                                          setupOptions)  # Interactive region of interest (ROI) selection for fitting
-    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList,
-                             setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
+    spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
+    roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions)  # Interactive region of interest (ROI) selection for fitting
+    snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
 
 if __name__ == "__main__":
