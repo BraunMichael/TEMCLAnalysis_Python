@@ -8,6 +8,17 @@ from shapely.geometry import Point, LineString, MultiLineString, Polygon
 pixelScale = 49  #nm per pixel
 averagedSlices = 5
 
+def radial_profile(data, center):
+    # https://stackoverflow.com/questions/21242011/most-efficient-way-to-calculate-radial-profile
+    y, x = np.indices((data.shape))
+    r = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+    r = r.astype(np.int)
+
+    tbin = np.bincount(r.ravel(), data.ravel())
+    nr = np.bincount(r.ravel())
+    radialprofile = tbin / nr
+    return radialprofile
+
 class FFTManager:
     def __init__(self, fig, ax):
         self.coords = {}
@@ -106,6 +117,12 @@ plt.close()
 # TODO: Not sure which to use, try integrating all of them
 
 fftCroppedCL = abs(np.fft.fftshift(np.fft.fft2(croppedCL)))
+fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
+
+centerFFTCoords = np.unravel_index(np.argmax(fftCroppedCL, axis=None), fftCroppedCL.shape)
+radialProfile = radial_profile(fftCroppedCL, centerFFTCoords)
+radialLogProfile = radial_profile(fftLogCroppedCL, centerFFTCoords)
+
 _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
 # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
 plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma')
@@ -120,22 +137,27 @@ ax.margins(x=0)
 plt.axis('equal')
 plt.show()
 
-
-fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
-
-_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma')
-ax.margins(x=0)
-plt.axis('equal')
+plt.plot(radialProfile)
 plt.show()
 
+#
+# _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+# plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma')
+# ax.margins(x=0)
+# plt.axis('equal')
+# plt.show()
+#
+#
+# _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+# plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+# ax.margins(x=0)
+# plt.axis('equal')
+# plt.show()
+#
+# plt.plot(radialLogProfile)
+# plt.show()
 
-_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
-ax.margins(x=0)
-plt.axis('equal')
-plt.show()
 
 print('here')
