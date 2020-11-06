@@ -5,8 +5,8 @@ from matplotlib.colors import LogNorm
 import matplotlib.patches as mpatches
 from shapely.geometry import Point, LineString, MultiLineString, Polygon
 
-
-
+pixelScale = 49  #nm per pixel
+averagedSlices = 5
 
 class FFTManager:
     def __init__(self, fig, ax):
@@ -43,7 +43,7 @@ wavelengthsRaw = np.loadtxt('Spectrum_WavelengthInfo.txt', delimiter=', ')
 wavelengths = wavelengthsRaw[:, 0]
 assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
 frameNum = int(len(wavelengths)/2)
-averagedSlices = 5
+
 assert averagedSlices % 2 == 1, "Only odd numbers of averaged wavelengths allowed to simplify calculations/meaning of averaged wavelengths"
 out = np.reshape(rawCL.flatten(), (len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
 outAveraged = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
@@ -53,9 +53,9 @@ for centerSlice in range(len(wavelengths)):
     outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
 outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
 fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-
-CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]),
+                     cmap='plasma', norm=LogNorm())
 plt.subplots_adjust(bottom=0.18)
 ax.margins(x=0)
 plt.axis('equal')
@@ -84,7 +84,58 @@ plt.show()
 centerSliceIndex = int(sSlice.val)
 centerWavelengthValue = wavelengths[centerSliceIndex]
 coordsOut = fftManager.coords
+
 # TODO: Pull avereagedOut data from coordsOut, FFT then radial integrate
 plt.close()
+
+xMin = int(round(coordsOut['x'][0]))
+xMax = int(round(coordsOut['x'][1]))
+yMin = int(round(coordsOut['y'][0]))
+yMax = int(round(coordsOut['y'][1]))
+assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
+croppedCL = outAveraged[centerSliceIndex, yMin:yMax, xMin:xMax]
+
+_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+plt.imshow(croppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+ax.margins(x=0)
+plt.axis('equal')
+plt.show()
+plt.close()
+
+# TODO: Not sure which to use, try integrating all of them
+
+fftCroppedCL = abs(np.fft.fftshift(np.fft.fft2(croppedCL)))
+_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma')
+ax.margins(x=0)
+plt.axis('equal')
+plt.show()
+
+_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+ax.margins(x=0)
+plt.axis('equal')
+plt.show()
+
+
+fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
+
+_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma')
+ax.margins(x=0)
+plt.axis('equal')
+plt.show()
+
+
+_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+ax.margins(x=0)
+plt.axis('equal')
+plt.show()
 
 print('here')
