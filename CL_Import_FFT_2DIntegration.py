@@ -10,6 +10,7 @@ from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage.morphology import generate_binary_structure, binary_erosion
 from scipy.ndimage import gaussian_filter
 
+from Utility.peak_prominence2d import *
 pixelScale = 49  #nm per pixel
 averagedSlices = 5
 
@@ -319,4 +320,3 @@ plt.show()
 # plt.show()
 
 
-print('here')
