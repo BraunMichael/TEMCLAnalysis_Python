@@ -207,20 +207,22 @@ if abs((xMax-xMin) - (yMax-yMin)) == 1:
     print('trying to fix it')
     if abs(xMax-xMin) > abs(yMax-yMin):
         print('case 1')
-        if xMin == 0:
-            xMax -= 1
-            print('xMax - 1')
-        else:
-            xMin -= 1
-            print('xmin-1')
-    else:
-        print('case 2')
         if yMin == 0:
             yMax -= 1
             print('ymax-1')
         else:
             yMin -= 1
             print('ymin-1')
+
+    else:
+        print('case 2')
+        if xMin == 0:
+            xMax -= 1
+            print('xMax - 1')
+        else:
+            xMin -= 1
+            print('xmin-1')
+
 print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
 print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
 assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
@@ -259,6 +261,8 @@ validCoordsBlurred = validCoordsRawBlurred.reshape(int(len(validCoordsRawBlurred
 xPeakCoordsBlurred = validCoordsBlurred[:, 0] - xMin
 yPeakCoordsBlurred = validCoordsBlurred[:, 1] - yMin
 
+peaks, idmap, promap, parentmap = getProminence(croppedCL, 0.2, min_area=None, include_edge=True)
+print('here')
 _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
 # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
 axs[0].imshow(croppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
