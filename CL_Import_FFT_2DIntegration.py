@@ -11,8 +11,12 @@ from scipy.ndimage.morphology import generate_binary_structure, binary_erosion
 from scipy.ndimage import gaussian_filter
 
 from Utility.peak_prominence2d import *
-pixelScale = 49  #nm per pixel
-averagedSlices = 5
+
+# User adjustable parameters
+pixelScale = 49  # nm per pixel
+averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
+rawCL = np.loadtxt('5min_Sample2.txt')
+# rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
 
 
 def radial_profile(data, center):
@@ -102,8 +106,7 @@ class FFTManager:
 
 
 
-# rawCL = np.loadtxt('5min_Sample2.txt')
-rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
+
 wavelengthsRaw = np.loadtxt('Spectrum_WavelengthInfo.txt', delimiter=', ')
 wavelengths = wavelengthsRaw[:, 0]
 assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
