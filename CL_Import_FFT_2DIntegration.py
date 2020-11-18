@@ -102,7 +102,8 @@ class FFTManager:
 
 
 
-rawCL = np.loadtxt('5min_Sample2.txt')
+# rawCL = np.loadtxt('5min_Sample2.txt')
+rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
 wavelengthsRaw = np.loadtxt('Spectrum_WavelengthInfo.txt', delimiter=', ')
 wavelengths = wavelengthsRaw[:, 0]
 assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
@@ -261,7 +262,7 @@ validCoordsBlurred = validCoordsRawBlurred.reshape(int(len(validCoordsRawBlurred
 xPeakCoordsBlurred = validCoordsBlurred[:, 0] - xMin
 yPeakCoordsBlurred = validCoordsBlurred[:, 1] - yMin
 
-peaks, idmap, promap, parentmap = getProminence(croppedCL, 0.2, min_area=None, include_edge=True)
+# peaks, idmap, promap, parentmap = getProminence(croppedCL, 0.2, min_area=None, include_edge=True)
 print('here')
 _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
 # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
