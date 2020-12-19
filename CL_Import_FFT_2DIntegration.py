@@ -171,6 +171,62 @@ plt.close()
 #
 outAveraged = outAveraged * imageHandler.imageMask + 1
 
+# Looping Peak Finding
+for wavelength in range(len(wavelengths)):
+    print(str(wavelengths[wavelength]) + "nm")
+    CLFrame = outAveraged[wavelength, :, :]
+    peakCoords = detect_peaks(CLFrame, 8).nonzero()
+
+    xPeakCoordsRaw = peakCoords[1]
+    yPeakCoordsRaw = peakCoords[0]
+    coordsToCheck = np.vstack((xPeakCoordsRaw, yPeakCoordsRaw)).T
+    validCoordsCheck = imageHandler.boundaryPoly.contains_points(coordsToCheck)
+    validCoordsCheck = np.vstack((validCoordsCheck, validCoordsCheck)).T
+    validCoordsRaw = np.ma.MaskedArray(coordsToCheck, mask=~validCoordsCheck).compressed()
+    validCoords = validCoordsRaw.reshape(int(len(validCoordsRaw)/2), 2)
+
+    # validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
+    xPeakCoords = validCoords[:, 0]
+    yPeakCoords = validCoords[:, 1]
+
+    gaussianSigma = 1
+    windowSize = 4
+    truncateWindow = (((windowSize - 1)/2)-0.5)/gaussianSigma
+
+    CLFrame_Blurred = gaussian_filter(CLFrame, sigma=gaussianSigma, truncate=truncateWindow)
+    peakCoordsBlurred = detect_peaks(CLFrame_Blurred, 4).nonzero()
+    xPeakCoordsBlurredRaw = peakCoordsBlurred[1]
+    yPeakCoordsBlurredRaw = peakCoordsBlurred[0]
+
+    coordsToCheckBlurred = np.vstack((xPeakCoordsBlurredRaw, yPeakCoordsBlurredRaw)).T
+    validCoordsCheckBlurred = imageHandler.boundaryPoly.contains_points(coordsToCheckBlurred)
+    validCoordsCheckBlurred = np.vstack((validCoordsCheckBlurred, validCoordsCheckBlurred)).T
+    validCoordsRawBlurred = np.ma.MaskedArray(coordsToCheckBlurred, mask=~validCoordsCheckBlurred).compressed()
+    validCoordsBlurred = validCoordsRawBlurred.reshape(int(len(validCoordsRawBlurred)/2), 2)
+
+    # validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
+    xPeakCoordsBlurred = validCoordsBlurred[:, 0]
+    yPeakCoordsBlurred = validCoordsBlurred[:, 1]
+
+    # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
+    print('here')
+    _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
+    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    axs[0].imshow(CLFrame, interpolation='none', cmap='plasma', norm=LogNorm())
+    axs[0].scatter(xPeakCoords, yPeakCoords, marker='x')
+    axs[0].margins(x=0, y=0)
+
+    axs[1].imshow(CLFrame_Blurred, interpolation='none', cmap='plasma', norm=LogNorm())
+    axs[1].scatter(xPeakCoordsBlurred, yPeakCoordsBlurred, marker='x')
+    axs[1].margins(x=0, y=0)
+
+    axs[0].axis('equal')
+    axs[1].axis('equal')
+    plt.show()
+    plt.close()
+
+
+# FFT Work
 fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
 # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
 CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
@@ -233,56 +289,7 @@ print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
 print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
 assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
 croppedCL = outAveraged[centerSliceIndex, yMin:yMax, xMin:xMax]
-peakCoords = detect_peaks(croppedCL, 8).nonzero()
 
-xPeakCoordsRaw = peakCoords[1] + xMin
-yPeakCoordsRaw = peakCoords[0] + yMin
-coordsToCheck = np.vstack((xPeakCoordsRaw, yPeakCoordsRaw)).T
-validCoordsCheck = imageHandler.boundaryPoly.contains_points(coordsToCheck)
-validCoordsCheck = np.vstack((validCoordsCheck, validCoordsCheck)).T
-validCoordsRaw = np.ma.MaskedArray(coordsToCheck, mask=~validCoordsCheck).compressed()
-validCoords = validCoordsRaw.reshape(int(len(validCoordsRaw)/2), 2)
-
-# validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
-xPeakCoords = validCoords[:, 0] - xMin
-yPeakCoords = validCoords[:, 1] - yMin
-
-
-gaussianSigma = 1
-windowSize = 4
-truncateWindow = (((windowSize - 1)/2)-0.5)/gaussianSigma
-
-croppedCL_Blurred = gaussian_filter(croppedCL, sigma=gaussianSigma, truncate=truncateWindow)
-peakCoordsBlurred = detect_peaks(croppedCL_Blurred, 4).nonzero()
-xPeakCoordsBlurredRaw = peakCoordsBlurred[1] + xMin
-yPeakCoordsBlurredRaw = peakCoordsBlurred[0] + yMin
-
-coordsToCheckBlurred = np.vstack((xPeakCoordsBlurredRaw, yPeakCoordsBlurredRaw)).T
-validCoordsCheckBlurred = imageHandler.boundaryPoly.contains_points(coordsToCheckBlurred)
-validCoordsCheckBlurred = np.vstack((validCoordsCheckBlurred, validCoordsCheckBlurred)).T
-validCoordsRawBlurred = np.ma.MaskedArray(coordsToCheckBlurred, mask=~validCoordsCheckBlurred).compressed()
-validCoordsBlurred = validCoordsRawBlurred.reshape(int(len(validCoordsRawBlurred)/2), 2)
-
-# validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
-xPeakCoordsBlurred = validCoordsBlurred[:, 0] - xMin
-yPeakCoordsBlurred = validCoordsBlurred[:, 1] - yMin
-
-# peaks, idmap, promap, parentmap = getProminence(croppedCL, 0.2, min_area=None, include_edge=True)
-print('here')
-_, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-axs[0].imshow(croppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
-axs[0].scatter(xPeakCoords, yPeakCoords, marker='x')
-axs[0].margins(x=0, y=0)
-
-axs[1].imshow(croppedCL_Blurred, interpolation='none', cmap='plasma', norm=LogNorm())
-axs[1].scatter(xPeakCoordsBlurred, yPeakCoordsBlurred, marker='x')
-axs[1].margins(x=0, y=0)
-
-axs[0].axis('equal')
-axs[1].axis('equal')
-plt.show()
-plt.close()
 
 # TODO: Not sure which to use, try integrating all of them
 
