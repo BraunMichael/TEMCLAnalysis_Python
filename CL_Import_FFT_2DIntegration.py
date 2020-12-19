@@ -15,6 +15,9 @@ from Utility.peak_prominence2d import *
 # User adjustable parameters
 pixelScale = 49  # nm per pixel
 averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
+gaussianSigma = 1
+windowSize = 4
+truncateWindow = (((windowSize - 1) / 2) - 0.5) / gaussianSigma
 # rawCL = np.loadtxt('5min_Sample2.txt')
 rawCL = np.loadtxt('Sample3_60min.txt')
 
@@ -117,10 +120,12 @@ frameNum = int(len(wavelengths)/2)
 assert averagedSlices % 2 == 1, "Only odd numbers of averaged wavelengths allowed to simplify calculations/meaning of averaged wavelengths"
 out = np.reshape(rawCL.flatten(), (len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
 outAveraged = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
+outAveragedBlurred = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
 for centerSlice in range(len(wavelengths)):
     lowerSlice = max(0, centerSlice - int(((averagedSlices - 1) / 2)))
     upperSlice = min(len(wavelengths)-1, centerSlice + int(((averagedSlices - 1) / 2)))
     outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
+    outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
 outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
 
 
@@ -172,8 +177,12 @@ plt.close()
 outAveraged = outAveraged * imageHandler.imageMask + 1
 
 # Looping Peak Finding
+xPeakCoordsDict = {}
+yPeakCoordsDict = {}
+xPeakCoordsBlurredDict = {}
+yPeakCoordsBlurredDict = {}
 for wavelength in range(len(wavelengths)):
-    print(str(wavelengths[wavelength]) + "nm")
+    # print(str(wavelengths[wavelength]) + "nm")
     CLFrame = outAveraged[wavelength, :, :]
     peakCoords = detect_peaks(CLFrame, 8).nonzero()
 
@@ -186,14 +195,10 @@ for wavelength in range(len(wavelengths)):
     validCoords = validCoordsRaw.reshape(int(len(validCoordsRaw)/2), 2)
 
     # validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
-    xPeakCoords = validCoords[:, 0]
-    yPeakCoords = validCoords[:, 1]
+    xPeakCoordsDict[wavelengths[wavelength]] = validCoords[:, 0]
+    yPeakCoordsDict[wavelengths[wavelength]] = validCoords[:, 1]
 
-    gaussianSigma = 1
-    windowSize = 4
-    truncateWindow = (((windowSize - 1)/2)-0.5)/gaussianSigma
-
-    CLFrame_Blurred = gaussian_filter(CLFrame, sigma=gaussianSigma, truncate=truncateWindow)
+    CLFrame_Blurred = outAveragedBlurred[wavelength, :, :]
     peakCoordsBlurred = detect_peaks(CLFrame_Blurred, 4).nonzero()
     xPeakCoordsBlurredRaw = peakCoordsBlurred[1]
     yPeakCoordsBlurredRaw = peakCoordsBlurred[0]
@@ -205,25 +210,49 @@ for wavelength in range(len(wavelengths)):
     validCoordsBlurred = validCoordsRawBlurred.reshape(int(len(validCoordsRawBlurred)/2), 2)
 
     # validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
-    xPeakCoordsBlurred = validCoordsBlurred[:, 0]
-    yPeakCoordsBlurred = validCoordsBlurred[:, 1]
+    xPeakCoordsBlurredDict[wavelengths[wavelength]] = validCoordsBlurred[:, 0]
+    yPeakCoordsBlurredDict[wavelengths[wavelength]] = validCoordsBlurred[:, 1]
 
     # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
-    print('here')
-    _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
-    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-    axs[0].imshow(CLFrame, interpolation='none', cmap='plasma', norm=LogNorm())
-    axs[0].scatter(xPeakCoords, yPeakCoords, marker='x')
-    axs[0].margins(x=0, y=0)
 
-    axs[1].imshow(CLFrame_Blurred, interpolation='none', cmap='plasma', norm=LogNorm())
-    axs[1].scatter(xPeakCoordsBlurred, yPeakCoordsBlurred, marker='x')
-    axs[1].margins(x=0, y=0)
+print('test')
+_, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
+plt.subplots_adjust(bottom=0.18)
+# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+CLImage = axs[0].imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
 
-    axs[0].axis('equal')
-    axs[1].axis('equal')
-    plt.show()
-    plt.close()
+CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]], yPeakCoordsDict[wavelengths[frameNum]], linestyle="", marker='x')
+axs[0].margins(x=0, y=0)
+
+CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
+
+CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]], yPeakCoordsBlurredDict[wavelengths[frameNum]], linestyle="", marker='x')
+axs[1].margins(x=0, y=0)
+
+axs[0].axis('equal')
+axs[1].axis('equal')
+axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
+sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=int(len(wavelengths) / 2), valfmt='%0.0f')
+sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths) / 2)]))
+
+
+def update(_):
+    sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
+    CLImage.set_data(outAveraged[int(sSlice.val), :, :])
+    CLImage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
+    CLImage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
+    CLImagePeaks.set_data(xPeakCoordsDict[wavelengths[int(sSlice.val)]], yPeakCoordsDict[wavelengths[int(sSlice.val)]])
+
+    CLImageBlurred.set_data(outAveragedBlurred[int(sSlice.val), :, :])
+    CLImageBlurred.vmin = np.min(outAveragedBlurred[int(sSlice.val), :, :])
+    CLImageBlurred.vmax = np.max(outAveragedBlurred[int(sSlice.val), :, :])
+    CLImageBlurredPeaks.set_data(xPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]], yPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]])
+    fig.canvas.draw_idle()
+
+
+sSlice.on_changed(update)
+plt.show()
+plt.close()
 
 
 # FFT Work
