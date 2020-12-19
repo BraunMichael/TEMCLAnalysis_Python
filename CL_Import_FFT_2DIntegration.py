@@ -70,6 +70,21 @@ def detect_peaks(image, neighborhoodSize):
     return detected_peaks
 
 
+def findPeaks(CLFrame):
+    # print(str(wavelengths[wavelengthNumber]) + "nm")
+    peakCoords = detect_peaks(CLFrame, 8).nonzero()  # Was set at 4 for the blurred one?
+    xPeakCoordsRaw = peakCoords[1]
+    yPeakCoordsRaw = peakCoords[0]
+    coordsToCheck = np.vstack((xPeakCoordsRaw, yPeakCoordsRaw)).T
+    validCoordsCheck = imageHandler.boundaryPoly.contains_points(coordsToCheck)
+    validCoordsCheck = np.vstack((validCoordsCheck, validCoordsCheck)).T
+    validCoordsRaw = np.ma.MaskedArray(coordsToCheck, mask=~validCoordsCheck).compressed()
+    validCoords = validCoordsRaw.reshape(int(len(validCoordsRaw)/2), 2)
+    validXCoords = validCoords[:, 0]
+    validYCoords = validCoords[:, 1]
+    return validXCoords, validYCoords
+
+
 class ImageHandler:
     def __init__(self):
         self.imageMask = None
@@ -175,47 +190,20 @@ plt.close()
 #
 #
 outAveraged = outAveraged * imageHandler.imageMask + 1
+outAveragedBlurred = outAveragedBlurred * imageHandler.imageMask + 1
 
 # Looping Peak Finding
 xPeakCoordsDict = {}
 yPeakCoordsDict = {}
 xPeakCoordsBlurredDict = {}
 yPeakCoordsBlurredDict = {}
+
 for wavelength in range(len(wavelengths)):
-    # print(str(wavelengths[wavelength]) + "nm")
-    CLFrame = outAveraged[wavelength, :, :]
-    peakCoords = detect_peaks(CLFrame, 8).nonzero()
-
-    xPeakCoordsRaw = peakCoords[1]
-    yPeakCoordsRaw = peakCoords[0]
-    coordsToCheck = np.vstack((xPeakCoordsRaw, yPeakCoordsRaw)).T
-    validCoordsCheck = imageHandler.boundaryPoly.contains_points(coordsToCheck)
-    validCoordsCheck = np.vstack((validCoordsCheck, validCoordsCheck)).T
-    validCoordsRaw = np.ma.MaskedArray(coordsToCheck, mask=~validCoordsCheck).compressed()
-    validCoords = validCoordsRaw.reshape(int(len(validCoordsRaw)/2), 2)
-
-    # validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
-    xPeakCoordsDict[wavelengths[wavelength]] = validCoords[:, 0]
-    yPeakCoordsDict[wavelengths[wavelength]] = validCoords[:, 1]
-
-    CLFrame_Blurred = outAveragedBlurred[wavelength, :, :]
-    peakCoordsBlurred = detect_peaks(CLFrame_Blurred, 4).nonzero()
-    xPeakCoordsBlurredRaw = peakCoordsBlurred[1]
-    yPeakCoordsBlurredRaw = peakCoordsBlurred[0]
-
-    coordsToCheckBlurred = np.vstack((xPeakCoordsBlurredRaw, yPeakCoordsBlurredRaw)).T
-    validCoordsCheckBlurred = imageHandler.boundaryPoly.contains_points(coordsToCheckBlurred)
-    validCoordsCheckBlurred = np.vstack((validCoordsCheckBlurred, validCoordsCheckBlurred)).T
-    validCoordsRawBlurred = np.ma.MaskedArray(coordsToCheckBlurred, mask=~validCoordsCheckBlurred).compressed()
-    validCoordsBlurred = validCoordsRawBlurred.reshape(int(len(validCoordsRawBlurred)/2), 2)
-
-    # validCoords = [coordsToCheck[n,:] for n in range(len(coordsToCheck)) if validCoordsCheck[n]]
-    xPeakCoordsBlurredDict[wavelengths[wavelength]] = validCoordsBlurred[:, 0]
-    yPeakCoordsBlurredDict[wavelengths[wavelength]] = validCoordsBlurred[:, 1]
+    xPeakCoordsDict[wavelengths[wavelength]], yPeakCoordsDict[wavelengths[wavelength]] = findPeaks(outAveraged[wavelength, :, :])
+    xPeakCoordsBlurredDict[wavelengths[wavelength]], yPeakCoordsBlurredDict[wavelengths[wavelength]] = findPeaks(outAveragedBlurred[wavelength, :, :])
 
     # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
 
-print('test')
 _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
 plt.subplots_adjust(bottom=0.18)
 # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
