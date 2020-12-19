@@ -15,7 +15,9 @@ from Utility.peak_prominence2d import *
 # User adjustable parameters
 pixelScale = 49  # nm per pixel
 averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
-rawCL = np.loadtxt('5min_Sample2.txt')
+# rawCL = np.loadtxt('5min_Sample2.txt')
+rawCL = np.loadtxt('Sample3_60min.txt')
+
 # rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
 
 
