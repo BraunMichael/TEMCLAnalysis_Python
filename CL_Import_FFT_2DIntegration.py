@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector, Button, Slider, PolygonSelector
 from matplotlib.colors import LogNorm
 import matplotlib.patches as mpatches
+from matplotlib.ticker import AutoMinorLocator
+
 from shapely.geometry import Point, LineString, MultiLineString, Polygon
 
 from scipy.ndimage.filters import maximum_filter
@@ -12,7 +14,16 @@ from scipy.ndimage import gaussian_filter
 
 from Utility.peak_prominence2d import *
 
+import joblib
+import contextlib
+import pickle
+import multiprocessing
+from tqdm import tqdm
+num_cores = multiprocessing.cpu_count()
+
+
 # User adjustable parameters
+saveFigures = False
 pixelScale = 49  # nm per pixel
 averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
 gaussianSigma = 1
@@ -22,6 +33,53 @@ truncateWindow = (((windowSize - 1) / 2) - 0.5) / gaussianSigma
 rawCL = np.loadtxt('Sample3_60min.txt')
 
 # rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
+
+SMALL_SIZE = 16
+MEDIUM_SIZE = 18
+BIGGER_SIZE = 20
+
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+
+def setAxisTicks(axisHandle, secondaryAxis=False):
+    axisHandle.minorticks_on()
+    if secondaryAxis:
+        axisHandle.tick_params(which='both', axis='both', direction='in', top=True, bottom=False, left=False,
+                               right=False)
+    else:
+        axisHandle.tick_params(which='both', axis='both', direction='in', top=False, bottom=True, left=True, right=True)
+    axisHandle.tick_params(which='major', axis='both', direction='in', length=8, width=1)
+    axisHandle.tick_params(which='minor', axis='both', direction='in', length=4, width=1)
+    axisHandle.xaxis.set_minor_locator(AutoMinorLocator(2))
+    axisHandle.yaxis.set_minor_locator(AutoMinorLocator(2))
+
+
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
+    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+    class TqdmBatchCompletionCallback:
+        def __init__(self, time, index, parallel):
+            self.index = index
+            self.parallel = parallel
+
+        def __call__(self, index):
+            tqdm_object.update()
+            if self.parallel._original_iterator is not None:
+                self.parallel.dispatch_next()
+
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
 
 
 def radial_profile(data, center):
