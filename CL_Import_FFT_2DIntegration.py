@@ -128,18 +128,29 @@ def detect_peaks(image, neighborhoodSize):
     return detected_peaks
 
 
-def findPeaks(CLFrame):
+def findPeaks(CLFrame, pixelSize):
     # print(str(wavelengths[wavelengthNumber]) + "nm")
+    backgroundPercentagePoint = 0.1  # the value that is higher than x percent of all valid points in the ROI
+    requiredBackgroundProminence = 0  # Required peak height as multiple of backgroundPercentagePoint to be a valid peak
+
     peakCoords = detect_peaks(CLFrame, 8).nonzero()  # Was set at 4 for the blurred one?
     xPeakCoordsRaw = peakCoords[1]
     yPeakCoordsRaw = peakCoords[0]
     coordsToCheck = np.vstack((xPeakCoordsRaw, yPeakCoordsRaw)).T
-    validCoordsCheck = imageHandler.boundaryPoly.contains_points(coordsToCheck)
-    validCoordsCheck = np.vstack((validCoordsCheck, validCoordsCheck)).T
-    validCoordsRaw = np.ma.MaskedArray(coordsToCheck, mask=~validCoordsCheck).compressed()
-    validCoords = validCoordsRaw.reshape(int(len(validCoordsRaw)/2), 2)
-    validXCoords = validCoords[:, 0]
-    validYCoords = validCoords[:, 1]
+    inBoundsCoordsCheck = imageHandler.boundaryPoly.contains_points(coordsToCheck)
+    inBoundsCoordsCheck = np.vstack((inBoundsCoordsCheck, inBoundsCoordsCheck)).T
+    inBoundsCoordsRaw = np.ma.MaskedArray(coordsToCheck, mask=~inBoundsCoordsCheck).compressed()
+    inBoundsCoords = inBoundsCoordsRaw.reshape(int(len(inBoundsCoordsRaw)/2), 2)
+    inBoundsCoordsX = inBoundsCoords[:, 0]
+    inBoundsCoordsY = inBoundsCoords[:, 1]
+    peakHeights = CLFrame[inBoundsCoordsY, inBoundsCoordsX]
+
+    allYValues = np.ndarray.flatten(CLFrame)
+    inBoundsYValues = allYValues[allYValues > 1]
+    minimumValidYValue = requiredBackgroundProminence * np.partition(inBoundsYValues, int(len(inBoundsYValues)*backgroundPercentagePoint))[int(len(inBoundsYValues)*backgroundPercentagePoint)]
+
+    validXCoords = pixelSize * inBoundsCoordsX[peakHeights > minimumValidYValue]
+    validYCoords = pixelSize * inBoundsCoordsY[peakHeights > minimumValidYValue]
     return validXCoords, validYCoords
 
 
@@ -255,10 +266,15 @@ xPeakCoordsDict = {}
 yPeakCoordsDict = {}
 xPeakCoordsBlurredDict = {}
 yPeakCoordsBlurredDict = {}
-
-for wavelength in range(len(wavelengths)):
-    xPeakCoordsDict[wavelengths[wavelength]], yPeakCoordsDict[wavelengths[wavelength]] = findPeaks(outAveraged[wavelength, :, :])
-    xPeakCoordsBlurredDict[wavelengths[wavelength]], yPeakCoordsBlurredDict[wavelengths[wavelength]] = findPeaks(outAveragedBlurred[wavelength, :, :])
+NNDict = {}
+NNBlurredDict = {}
+firstNNDict = {}
+firstNNBlurredDict = {}
+pdfXValues = list(range(0, 1001))
+for wavelengthIndex in range(len(wavelengths)):
+    wavelength = wavelengths[wavelengthIndex]
+    xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength] = findPeaks(outAveraged[wavelengthIndex, :, :], pixelScale)
+    xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength] = findPeaks(outAveragedBlurred[wavelengthIndex, :, :], pixelScale)
 
     # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
 
