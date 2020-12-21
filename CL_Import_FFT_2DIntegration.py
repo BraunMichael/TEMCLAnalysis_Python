@@ -280,15 +280,13 @@ for wavelengthIndex in range(len(wavelengths)):
 
 _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
 plt.subplots_adjust(bottom=0.18)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
 CLImage = axs[0].imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-
-CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]], yPeakCoordsDict[wavelengths[frameNum]], linestyle="", marker='x')
+CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
 axs[0].margins(x=0, y=0)
 
 CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
+CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
 
-CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]], yPeakCoordsBlurredDict[wavelengths[frameNum]], linestyle="", marker='x')
 axs[1].margins(x=0, y=0)
 
 axs[0].axis('equal')
@@ -303,12 +301,12 @@ def update(_):
     CLImage.set_data(outAveraged[int(sSlice.val), :, :])
     CLImage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
     CLImage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
-    CLImagePeaks.set_data(xPeakCoordsDict[wavelengths[int(sSlice.val)]], yPeakCoordsDict[wavelengths[int(sSlice.val)]])
+    CLImagePeaks.set_data(xPeakCoordsDict[wavelengths[int(sSlice.val)]]/pixelScale, yPeakCoordsDict[wavelengths[int(sSlice.val)]]/pixelScale)
 
     CLImageBlurred.set_data(outAveragedBlurred[int(sSlice.val), :, :])
     CLImageBlurred.vmin = np.min(outAveragedBlurred[int(sSlice.val), :, :])
     CLImageBlurred.vmax = np.max(outAveragedBlurred[int(sSlice.val), :, :])
-    CLImageBlurredPeaks.set_data(xPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]], yPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]])
+    CLImageBlurredPeaks.set_data(xPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]]/pixelScale)
     fig.canvas.draw_idle()
 
 
