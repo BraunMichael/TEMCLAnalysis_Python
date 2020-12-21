@@ -11,6 +11,7 @@ from shapely.geometry import Point, LineString, MultiLineString, Polygon
 from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage.morphology import generate_binary_structure, binary_erosion
 from scipy.ndimage import gaussian_filter
+from scipy.stats import lognorm
 
 from Utility.peak_prominence2d import *
 
@@ -31,6 +32,7 @@ windowSize = 4
 truncateWindow = (((windowSize - 1) / 2) - 0.5) / gaussianSigma
 # rawCL = np.loadtxt('5min_Sample2.txt')
 rawCL = np.loadtxt('Sample3_60min.txt')
+
 
 # rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
 
@@ -154,6 +156,37 @@ def findPeaks(CLFrame, pixelSize):
     return validXCoords, validYCoords
 
 
+def getNearestNeighborDistances(xPeakCoords, yPeakCoords):
+    NNdistances = []
+    if len(xPeakCoords) > 1:
+        for i in range(len(xPeakCoords)):
+            rawNNdistances = []
+            for j in range(len(yPeakCoords)):
+                if i != j:
+                    rawNNdistances.append(np.sqrt((xPeakCoords[i] - xPeakCoords[j]) ** 2 + (yPeakCoords[i] - yPeakCoords[j]) ** 2))
+            rawNNdistances.sort()
+            NNdistances.append(rawNNdistances)
+    return NNdistances
+
+
+def saveNNGraph(firstNNDict, pdfXValues, wavelength):
+    shape, loc, scale = lognorm.fit(firstNNDict[wavelength], loc=0)
+    pdfYValues = lognorm.pdf(pdfXValues, shape, loc=loc, scale=scale)
+
+    fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1, dpi=300)
+    plt.plot(firstNNDict[wavelength], np.zeros(len(firstNNDict[wavelength])), 'k|', markersize=30)
+    plt.plot(pdfXValues, pdfYValues, 'k-')
+    fig.canvas.set_window_title('First NN Distance - ' + str(532))
+    plt.title('First NN Distances - ' + str(532))
+    setAxisTicks(ax)
+    ax.margins(x=0)
+    plt.xlabel('Distance (nm)')
+    plt.ylabel('Probability')
+    # plt.show()
+    fig.savefig('OutputFigures/'+str(wavelength)+'.png', bbox_inches='tight')
+    plt.close(fig)
+
+
 class ImageHandler:
     def __init__(self):
         self.imageMask = None
@@ -191,8 +224,6 @@ class FFTManager:
         selection = mpatches.Rectangle((eclick.xdata, eclick.ydata), abs(eclick.xdata - erelease.xdata), abs(eclick.ydata - erelease.ydata), linewidth=1, edgecolor='green', facecolor='none', alpha=0.5, fill=False)
         self.ax.add_patch(selection)
         self.fig.canvas.draw()
-
-
 
 
 
@@ -277,6 +308,19 @@ for wavelengthIndex in range(len(wavelengths)):
     xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength] = findPeaks(outAveragedBlurred[wavelengthIndex, :, :], pixelScale)
 
     # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
+    NNDict[wavelength] = getNearestNeighborDistances(xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength])
+    NNBlurredDict[wavelength] = getNearestNeighborDistances(xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength])
+
+    # This is non blurred only right now
+    firstNNDict[wavelength] = []
+    for peak in NNDict[wavelength]:
+        firstNNDict[wavelength].append(peak[0])
+
+
+# Only does non-blurred right now
+if saveFigures:
+    with tqdm_joblib(tqdm(desc="Saving Nearest Neighbor Graphs", total=len(wavelengths))) as progress_bar:
+        joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNDict, pdfXValues, wavelength) for wavelength in wavelengths)
 
 _, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
 plt.subplots_adjust(bottom=0.18)
@@ -288,7 +332,6 @@ CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation
 CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
 
 axs[1].margins(x=0, y=0)
-
 axs[0].axis('equal')
 axs[1].axis('equal')
 axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
