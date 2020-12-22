@@ -133,7 +133,7 @@ def detect_peaks(image, neighborhoodSize):
 def findPeaks(CLFrame, pixelSize):
     # print(str(wavelengths[wavelengthNumber]) + "nm")
     backgroundPercentagePoint = 0.1  # the value that is higher than x percent of all valid points in the ROI
-    requiredBackgroundProminence = 0  # Required peak height as multiple of backgroundPercentagePoint to be a valid peak
+    requiredBackgroundProminence = 2  # Required peak height as multiple of backgroundPercentagePoint to be a valid peak
 
     peakCoords = detect_peaks(CLFrame, 8).nonzero()  # Was set at 4 for the blurred one?
     xPeakCoordsRaw = peakCoords[1]
@@ -149,7 +149,19 @@ def findPeaks(CLFrame, pixelSize):
 
     allYValues = np.ndarray.flatten(CLFrame)
     inBoundsYValues = allYValues[allYValues > 1]
-    minimumValidYValue = requiredBackgroundProminence * np.partition(inBoundsYValues, int(len(inBoundsYValues)*backgroundPercentagePoint))[int(len(inBoundsYValues)*backgroundPercentagePoint)]
+    inBoundsYValues.sort()
+    backgroundPoints = np.partition(inBoundsYValues, int(len(inBoundsYValues)*backgroundPercentagePoint))[:int(len(inBoundsYValues)*backgroundPercentagePoint)]
+    # # Uses the x percentage lower point (ie 250th point if 1000 points) to define background level
+    # minimumValidYValue = requiredBackgroundProminence * backgroundPoints[int(len(inBoundsYValues)*backgroundPercentagePoint)]
+
+    # # Uses the average and standard deviation of the lowest x percentage of points (ie the lowest 250 points if 1000 points) to define background level
+    # # And requires peak to be above n standard deviations of those points
+    # backgoundAverage = np.mean(backgroundPoints)
+    # backgroundStdDev = np.std(backgroundPoints)
+    # minimumValidYValue = requiredBackgroundProminence * backgroundStdDev + backgoundAverage
+
+    minimumValidYValue = 400
+
 
     validXCoords = pixelSize * inBoundsCoordsX[peakHeights > minimumValidYValue]
     validYCoords = pixelSize * inBoundsCoordsY[peakHeights > minimumValidYValue]
