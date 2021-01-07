@@ -294,7 +294,7 @@ for centerSlice in range(len(wavelengths)):
     lowerSlice = max(0, centerSlice - int(((averagedSlices - 1) / 2)))
     upperSlice = min(len(wavelengths)-1, centerSlice + int(((averagedSlices - 1) / 2)))
     outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
-    outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
+    # outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
 outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
 
 
@@ -344,6 +344,13 @@ plt.close()
 #
 #
 outAveraged = outAveraged * imageHandler.imageMask + 1
+
+for centerSlice in range(len(wavelengths)):
+    CLFrame = outAveraged[centerSlice, :, :]
+    backgroundPoints = getBackgroundPoints(CLFrame, 0.01)
+    backgroundAverage = np.mean(backgroundPoints)
+    outAveragedBlurred[centerSlice, :, :] = gaussian_filter(CLFrame, sigma=gaussianSigma, truncate=truncateWindow) + backgroundAverage/2
+
 outAveragedBlurred = outAveragedBlurred * imageHandler.imageMask + 1
 
 # Looping Peak Finding
