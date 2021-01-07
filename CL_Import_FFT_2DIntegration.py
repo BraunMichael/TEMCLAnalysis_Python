@@ -26,6 +26,9 @@ num_cores = multiprocessing.cpu_count()
 # User adjustable parameters
 saveFigures = False
 pixelScale = 49  # nm per pixel
+backgroundPercentagePoint = 0.2  # the value that is higher than x percent of all valid points in the ROI
+requiredBackgroundProminence = 7  # Required peak height as multiple of backgroundPercentagePoint to be a valid peak or number of standard deviations above background average
+
 averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
 gaussianSigma = 1
 windowSize = 4
@@ -130,12 +133,51 @@ def detect_peaks(image, neighborhoodSize):
     return detected_peaks
 
 
-def findPeaks(CLFrame, pixelSize):
-    # print(str(wavelengths[wavelengthNumber]) + "nm")
-    backgroundPercentagePoint = 0.1  # the value that is higher than x percent of all valid points in the ROI
-    requiredBackgroundProminence = 2  # Required peak height as multiple of backgroundPercentagePoint to be a valid peak
+def checkValidNeighbors(CLFrame, rowNum, colNum):
+    if (CLFrame[rowNum - 1, colNum] > 1 and CLFrame[rowNum + 1, colNum] > 1 and
+            CLFrame[rowNum - 1, colNum - 1] > 1 and CLFrame[rowNum - 1, colNum + 1] > 1 and
+            CLFrame[rowNum + 1, colNum - 1] > 1 and CLFrame[rowNum + 1, colNum + 1] > 1 and
+            CLFrame[rowNum, colNum - 1] > 1 and CLFrame[rowNum, colNum + 1] > 1):
+        return True
+    return False
 
-    peakCoords = detect_peaks(CLFrame, 8).nonzero()  # Was set at 4 for the blurred one?
+
+def isPeak(CLFrame, rowNum, colNum):
+    if (CLFrame[rowNum, colNum] > CLFrame[rowNum - 1, colNum] and CLFrame[rowNum, colNum] > CLFrame[rowNum + 1, colNum] and
+            CLFrame[rowNum, colNum] > CLFrame[rowNum - 1, colNum - 1] and CLFrame[rowNum, colNum] > CLFrame[rowNum - 1, colNum + 1] and
+            CLFrame[rowNum, colNum] > CLFrame[rowNum + 1, colNum - 1] and CLFrame[rowNum, colNum] > CLFrame[rowNum + 1, colNum + 1] and
+            CLFrame[rowNum, colNum] > CLFrame[rowNum, colNum - 1] and CLFrame[rowNum, colNum] > CLFrame[rowNum, colNum + 1]):
+        return True
+    return False
+
+
+def simplePeaks(CLFrame):
+    xCoords = []
+    yCoords = []
+    for rowNum in range(np.shape(CLFrame)[0]):
+        for colNum in range(np.shape(CLFrame)[1]):
+            if CLFrame[rowNum, colNum] > 1:
+                if rowNum > 0 and colNum > 0:
+                    if checkValidNeighbors(CLFrame, rowNum, colNum):
+                        if isPeak(CLFrame, rowNum, colNum):
+                            xCoords.append(colNum)
+                            yCoords.append(rowNum)
+    return yCoords, xCoords
+
+
+def getBackgroundPoints(CLFrame, backgroundPercentagePoint):
+    # # Uses the x percentage lower point (ie 250th point if 1000 points) to define background level
+    allYValues = np.ndarray.flatten(CLFrame)
+    inBoundsYValues = allYValues[allYValues > 1]
+    inBoundsYValues.sort()
+    backgroundPoints = np.partition(inBoundsYValues, int(len(inBoundsYValues)*backgroundPercentagePoint))[:int(len(inBoundsYValues)*backgroundPercentagePoint)]
+    return backgroundPoints
+
+
+def findPeaks(CLFrame, pixelSize, backgroundPercentagePoint, requiredBackgroundProminence):
+    # print(str(wavelengths[wavelengthNumber]) + "nm")
+    # peakCoords = detect_peaks(CLFrame, 8).nonzero()  # Was set at 4 for the blurred one?
+    peakCoords = simplePeaks(CLFrame)
     xPeakCoordsRaw = peakCoords[1]
     yPeakCoordsRaw = peakCoords[0]
     coordsToCheck = np.vstack((xPeakCoordsRaw, yPeakCoordsRaw)).T
