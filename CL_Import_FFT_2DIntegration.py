@@ -189,11 +189,11 @@ def findPeaks(CLFrame, pixelSize, backgroundPercentagePoint, requiredBackgroundP
     inBoundsCoordsY = inBoundsCoords[:, 1]
     peakHeights = CLFrame[inBoundsCoordsY, inBoundsCoordsX]
 
-    allYValues = np.ndarray.flatten(CLFrame)
-    inBoundsYValues = allYValues[allYValues > 1]
-    inBoundsYValues.sort()
-    backgroundPoints = np.partition(inBoundsYValues, int(len(inBoundsYValues)*backgroundPercentagePoint))[:int(len(inBoundsYValues)*backgroundPercentagePoint)]
+
+
     # # Uses the x percentage lower point (ie 250th point if 1000 points) to define background level
+
+    backgroundPoints = getBackgroundPoints(CLFrame, backgroundPercentagePoint)
     # minimumValidYValue = requiredBackgroundProminence * backgroundPoints[int(len(inBoundsYValues)*backgroundPercentagePoint)]
 
     # # Uses the average and standard deviation of the lowest x percentage of points (ie the lowest 250 points if 1000 points) to define background level
