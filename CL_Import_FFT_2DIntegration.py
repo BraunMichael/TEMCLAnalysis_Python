@@ -383,7 +383,7 @@ if saveFigures:
     with tqdm_joblib(tqdm(desc="Saving Nearest Neighbor Graphs", total=len(wavelengths))) as progress_bar:
         joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNDict, pdfXValues, wavelength) for wavelength in wavelengths)
 
-_, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2)
+fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
 plt.subplots_adjust(bottom=0.18)
 CLImage = axs[0].imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
 CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
@@ -391,10 +391,13 @@ axs[0].margins(x=0, y=0)
 
 CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
 CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
-
+manager = plt.get_current_fig_manager()
+manager.window.maximize()
 axs[1].margins(x=0, y=0)
 axs[0].axis('equal')
 axs[1].axis('equal')
+axs[0].set_adjustable('box')
+axs[1].set_adjustable('box')
 axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
 sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=int(len(wavelengths) / 2), valfmt='%0.0f')
 sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths) / 2)]))
