@@ -31,7 +31,7 @@ requiredBackgroundProminence = 7  # Required peak height as multiple of backgrou
 
 averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
 gaussianSigma = 1
-windowSize = 4
+windowSize = 3
 truncateWindow = (((windowSize - 1) / 2) - 0.5) / gaussianSigma
 # rawCL = np.loadtxt('5min_Sample2.txt')
 rawCL = np.loadtxt('Sample3_60min.txt')
@@ -196,14 +196,13 @@ def findPeaks(CLFrame, pixelSize, backgroundPercentagePoint, requiredBackgroundP
     backgroundPoints = getBackgroundPoints(CLFrame, backgroundPercentagePoint)
     # minimumValidYValue = requiredBackgroundProminence * backgroundPoints[int(len(inBoundsYValues)*backgroundPercentagePoint)]
 
-    # # Uses the average and standard deviation of the lowest x percentage of points (ie the lowest 250 points if 1000 points) to define background level
-    # # And requires peak to be above n standard deviations of those points
-    # backgoundAverage = np.mean(backgroundPoints)
-    # backgroundStdDev = np.std(backgroundPoints)
-    # minimumValidYValue = requiredBackgroundProminence * backgroundStdDev + backgoundAverage
-
-    minimumValidYValue = 400
-
+    # Uses the average and standard deviation of the lowest x percentage of points (ie the lowest 250 points if 1000 points) to define background level
+    # And requires peak to be above n standard deviations of those points
+    backgroundAverage = np.mean(backgroundPoints)
+    backgroundStdDev = np.std(backgroundPoints)
+    minimumValidYValue = requiredBackgroundProminence * backgroundStdDev + backgroundAverage
+    # print('Avg = ' + str(backgroundAverage) + ' StdDev = ' + str(backgroundStdDev) + 'MinimumYValue = ' + str(minimumValidYValue))
+    # minimumValidYValue = 10
 
     validXCoords = pixelSize * inBoundsCoordsX[peakHeights > minimumValidYValue]
     validYCoords = pixelSize * inBoundsCoordsY[peakHeights > minimumValidYValue]
@@ -365,8 +364,9 @@ firstNNBlurredDict = {}
 pdfXValues = list(range(0, 1001))
 for wavelengthIndex in range(len(wavelengths)):
     wavelength = wavelengths[wavelengthIndex]
-    xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength] = findPeaks(outAveraged[wavelengthIndex, :, :], pixelScale)
-    xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength] = findPeaks(outAveragedBlurred[wavelengthIndex, :, :], pixelScale)
+
+    xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength] = findPeaks(outAveraged[wavelengthIndex, :, :], pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
+    xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength] = findPeaks(outAveragedBlurred[wavelengthIndex, :, :], pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
 
     # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
     NNDict[wavelength] = getNearestNeighborDistances(xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength])
