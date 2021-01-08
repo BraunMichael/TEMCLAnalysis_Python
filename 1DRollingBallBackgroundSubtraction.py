@@ -348,7 +348,7 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
 
 def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: RollingBall, setupOptions: SetupOptions):
     isXRD = setupOptions.isXRD
-    rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)
+    rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius, setupOptions)
     fig, ax = plt.subplots(figsize=(10, 8))
     plt.subplots_adjust(bottom=0.25)
     ax.margins(x=0)
@@ -360,7 +360,7 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
         yLabel = 'Intensity'
     ax.plot(spectrumData.xVals, yVals, 'k')
     background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
-    subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b',
+    subtracted, = ax.plot(spectrumData.xVals, yVals - rollingBallBackgroundData, 'b',
                           label="Background Subtracted")
     plt.legend(loc='best')
     if isXRD:
