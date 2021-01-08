@@ -60,6 +60,7 @@ class SetupOptions:
         self.doBackgroundSubtraction = True
         self.isGeSnPL = False
         self.modelType = ("gaussian", 0)
+        self.isLogPlot = True
 
 
 SMALL_SIZE = 18
@@ -266,9 +267,13 @@ def calculateSingleBackground(measuredAngles, lnIntensities, angleNum, radiussqu
     return ballPoints - backgroundOffset
 
 
-def rollingBallBackground(spectrumData: SpectrumData, rollingBallRatioVal, radius):
+def rollingBallBackground(spectrumData: SpectrumData, rollingBallRatioVal, radius, setupOptions: SetupOptions):
     radiussquared = radius * radius
-    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, spectrumData.lnIntensity, angleNum, radiussquared,
+    if setupOptions.isLogPlot:
+        yVals = spectrumData.lnIntensity
+    else:
+        yVals = np.exp(spectrumData.lnIntensity)
+    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, yVals, angleNum, radiussquared,
                                                 rollingBallRatioVal) for angleNum in range(spectrumData.numXVals)]
     return np.nanmax(allBackgrounds, axis=0)
 
@@ -346,18 +351,24 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     fig, ax = plt.subplots(figsize=(10, 8))
     plt.subplots_adjust(bottom=0.25)
     ax.margins(x=0)
-    ax.plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
+    if setupOptions.isLogPlot:
+        yVals = spectrumData.lnIntensity
+        yLabel = 'ln(Intensity)'
+    else:
+        yVals = np.exp(spectrumData.lnIntensity)
+        yLabel = 'Intensity'
+    ax.plot(spectrumData.xVals, yVals, 'k')
     background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
     subtracted, = ax.plot(spectrumData.xVals, spectrumData.lnIntensity - rollingBallBackgroundData, 'b',
                           label="Background Subtracted")
     plt.legend(loc='best')
     if isXRD:
         plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='$2\\theta$',
-                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                  plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange
     else:  # isPL
         plotSetup(fig, ax, spectrumData.nakedFileName, 'BackgroundSubtraction', plotXLabel='Energy (eV)',
-                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                  plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
         rollingBall.radius = spectrumData.xRange * 10
         rollingBall.ratio = 1
 
@@ -381,9 +392,12 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     def update(_):
         sRadius.valtext.set_text('{:.1f}'.format(10 ** sRadius.val))
         sRatio.valtext.set_text('{:.1f}'.format(10 ** sRatio.val))
-        rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val)
+        rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val, setupOptions)
         background.set_ydata(rollingBallBackgroundDataUpdate)
-        subtracted.set_ydata(spectrumData.lnIntensity - rollingBallBackgroundDataUpdate)
+        if setupOptions.isLogPlot:
+            subtracted.set_ydata(spectrumData.lnIntensity - rollingBallBackgroundDataUpdate)
+        else:
+            subtracted.set_ydata(np.exp(spectrumData.lnIntensity) - rollingBallBackgroundDataUpdate)
         fig.canvas.draw_idle()
 
     sRadius.on_changed(update)
@@ -400,15 +414,22 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
     # Each MultiFit Area uses all the data in the selected area and tries to fit the regions within to the whole data,
     # Except the peak center of each region in the MultiFit area is limited to its selected region
     fig, ax = plt.subplots(figsize=(10, 8))
+    if setupOptions.isLogPlot:
+        yLabel = 'ln(Intensity)'
+        yVals = spectrumData.bgSubIntensity
+    else:
+        yLabel = 'Intensity'
+        yVals = np.exp(spectrumData.bgSubIntensity)
+
     if setupOptions.isXRD:
         plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$',
-                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                  plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
     else:  # isPL
         plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='Energy (eV)',
-                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                  plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
 
     plt.subplots_adjust(bottom=0.2)
-    ax.plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
+    ax.plot(spectrumData.xVals, yVals, 'b')
 
     class RangeSelect:
         def __init__(self, numRanges):
@@ -592,7 +613,7 @@ def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
             an1.draggable()
 
 
-def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL):
+def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL, out):
     if isGeSnPL:
         for centerEnergy in np.asarray(centerXValsList):
             directSnContent = max(round(100 * DirectBandgap_To_SnContent(centerEnergy), 1), 0)
@@ -629,10 +650,17 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
                   plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
         plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)', plotYLabel='',
                   setupOptions=setupOptions, withTopAxis=True)
-    axs[0].plot(spectrumData.xVals, spectrumData.lnIntensity, 'k')
-    rawYmin, _ = axs[0].get_ylim()
-    axs[1].plot(spectrumData.xVals, spectrumData.bgSubIntensity, 'b')
-    bgYmin, _ = axs[1].get_ylim()
+    if setupOptions.isLogPlot:
+        yVals = spectrumData.lnIntensity
+        bgYVals = spectrumData.bgSubIntensity
+    else:
+        yVals = np.exp(spectrumData.lnIntensity)
+        bgYVals = np.exp(spectrumData.bgSubIntensity)
+    axs[0].plot(spectrumData.xVals, yVals, 'k')
+    rawYmin, rawYmax = axs[0].get_ylim()
+    axs[1].plot(spectrumData.xVals, bgYVals, 'b')
+    bgYmin, bgYmax = axs[1].get_ylim()
+    print('yValMin: ' + str(rawYmin) + 'bgYmin: ' + str(bgYmin))
 
     centerXValsList = []
     heightList = []
@@ -644,7 +672,11 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
         if len(comps) > 1:
             for _, component in comps.items():
                 axs[1].plot(subCoords['x'], np.log(component), 'g--')
-        axs[1].plot(subCoords['x'], np.log(out.best_fit), 'r--')
+        if setupOptions.isLogPlot:
+            fitYVals = np.log(out.best_fit)
+        else:
+            fitYVals = out.best_fit
+        axs[1].plot(subCoords['x'], fitYVals, 'r--')
         for key, value in out.best_values.items():
             if 'center' in key:
                 centerXValsList.append(value)
@@ -655,7 +687,7 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     if isXRD:
         xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs)
     else:  # isPL
-        plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions.isGeSnPL)
+        plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions.isGeSnPL, out)
 
     print("Results from:", spectrumData.nakedFileName)
     axs[0].set_ylim(bottom=rawYmin)
@@ -702,11 +734,11 @@ def hide_GeSnPL(win):
 def show_GeSnPL(win, isGeSnPL):
     if 'geSnPL_Label' not in win.children:
         item_Label = tkinter.Label(win, text="[PL Only] GeSn specific calculations?", name='geSnPL_Label')
-        item_Label.grid(row=7, column=0)
+        item_Label.grid(row=8, column=0)
         r1isGeSnPL = tkinter.Radiobutton(win, text="Yes", variable=isGeSnPL, value=1, name='geSnPL_YesButton')
         r2isGeSnPL = tkinter.Radiobutton(win, text="No", variable=isGeSnPL, value=0, name='geSnPL_NoButton')
-        r1isGeSnPL.grid(row=7, column=1)
-        r2isGeSnPL.grid(row=7, column=2)
+        r1isGeSnPL.grid(row=8, column=1)
+        r2isGeSnPL.grid(row=8, column=2)
 
 
 def get_setupOptions():
@@ -720,11 +752,12 @@ def get_setupOptions():
 
 
 def on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL,
-               modelType):
+               modelType, isLogPlot):
     setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.darkFilePath = darkFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.isXRD = isXRD.get()
     setupOptions.doBackgroundSubtraction = doBackgroundSubtraction.get()
+    setupOptions.isLogPlot = isLogPlot.get()
     setupOptions.isGeSnPL = isGeSnPL.get()
     setupOptions.modelType = modelType
     with open('SetupOptionsJSON.txt', 'w') as outfile:
@@ -739,6 +772,7 @@ def uiInput(win, setupOptions):
 
     isXRD = tkinter.BooleanVar(value=setupOptions.isXRD)
     doBackgroundSubtraction = tkinter.BooleanVar(value=setupOptions.doBackgroundSubtraction)
+    isLogPlot = tkinter.BooleanVar(value=setupOptions.isLogPlot)
     isGeSnPL = tkinter.BooleanVar(value=setupOptions.isGeSnPL)
 
     tkinter.Label(win, text="Data File:").grid(row=0, column=0)
@@ -783,11 +817,18 @@ def uiInput(win, setupOptions):
         radioModelType = tkinter.Radiobutton(win, text=model, variable=varModelType, value=number)
         radioModelType.grid(row=6, column=(number + 1))
 
+    item_Label = tkinter.Label(win, text="Plot in Log Scale?", name='isLogPlot_Label')
+    item_Label.grid(row=7, column=0)
+    r1isLogPlot = tkinter.Radiobutton(win, text="Yes", variable=isLogPlot, value=1, name='isLogPlot_YesButton')
+    r2isLogPlot = tkinter.Radiobutton(win, text="No", variable=isLogPlot, value=0, name='isLogPlot_NoButton')
+    r1isLogPlot.grid(row=7, column=1)
+    r2isLogPlot.grid(row=7, column=2)
+
     if setupOptions.isXRD:
         hide_GeSnPL(win)
     else:
         show_GeSnPL(win, isGeSnPL)
-    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelTypes[varModelType.get()]))
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, darkFileEntryText, isXRD, doBackgroundSubtraction, isGeSnPL, modelTypes[varModelType.get()], isLogPlot))
     win.mainloop()
 
 
