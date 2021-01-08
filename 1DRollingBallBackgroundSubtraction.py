@@ -50,6 +50,7 @@ class SpectrumData:
         self.background = None
         self.bgSubIntensity = None  # ln of intensity
         self.expBgSubIntensity = None  # Raw intensity
+        self.signalToNoise = None
 
 
 class SetupOptions:
@@ -632,6 +633,7 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL, out):
                                   arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                   patchB=None))
             an1.draggable()
+    spectrumData.signalToNoise = np.mean(out.best_fit/np.abs(out.residual))
 
 
 def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list,
@@ -690,8 +692,10 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
         plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions.isGeSnPL, out)
 
     print("Results from:", spectrumData.nakedFileName)
-    axs[0].set_ylim(bottom=rawYmin)
-    axs[1].set_ylim(bottom=bgYmin)
+    if spectrumData.signalToNoise:
+        print("Signal to noise: " + str(spectrumData.signalToNoise))
+    axs[0].set_ylim(bottom=rawYmin, top=rawYmax)
+    axs[1].set_ylim(bottom=bgYmin, top=bgYmax)
 
     plt.show(block=True)
     plt.close()
