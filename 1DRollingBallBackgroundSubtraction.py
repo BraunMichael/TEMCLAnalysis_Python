@@ -662,10 +662,10 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     rawYmin, rawYmax = axs[0].get_ylim()
     axs[1].plot(spectrumData.xVals, bgYVals, 'b')
     bgYmin, bgYmax = axs[1].get_ylim()
-    print('yValMin: ' + str(rawYmin) + 'bgYmin: ' + str(bgYmin))
 
     centerXValsList = []
     heightList = []
+    out = None
     for model, params, subCoords in zip(modelList, paramList, fittingCoordsList):
         out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
         print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
