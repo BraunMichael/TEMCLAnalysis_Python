@@ -578,7 +578,7 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList, modelType: str):
     return prepareFittingModels(combinedModelsList, modelType), coordsList
 
 
-def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
+def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs, setupOptions):
     proposedUserSubstrateTwoTheta = centerXValsList[heightList.index(max(heightList))]
     substrateModel = VoigtModel()
     params = substrateModel.guess(spectrumData.expBgSubIntensity, x=spectrumData.xVals, negative=False)
@@ -600,22 +600,31 @@ def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs):
         print("Zach Comp:", round(calculateXRDSnContent_Zach(centerTwoTheta), 1))
         if abs(centerTwoTheta - literatureSubstrateTwoTheta) > 0.05:  # Don't draw one for the substrate
             _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerTwoTheta + twoThetaOffset)
-            an0 = axs[0].annotate(str(abs(michaelSnContent)),
-                                  xy=(centerTwoTheta + twoThetaOffset, spectrumData.lnIntensity[centerIndex]),
-                                  xycoords='data', xytext=(0, 72), textcoords='offset points',
-                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                                  patchB=None))
-            an0.draggable()
-            an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(
-                centerTwoTheta + twoThetaOffset, spectrumData.bgSubIntensity[centerIndex]), xycoords='data',
-                                  xytext=(0, 72), textcoords='offset points',
-                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                                  patchB=None))
-            an1.draggable()
+            if setupOptions.doBackgroundSubtraction:
+                an0 = axs[0].annotate(str(abs(michaelSnContent)),
+                                      xy=(centerTwoTheta + twoThetaOffset, spectrumData.lnIntensity[centerIndex]),
+                                      xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                      arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                      patchB=None))
+                an0.draggable()
+
+                an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(
+                    centerTwoTheta + twoThetaOffset, spectrumData.bgSubIntensity[centerIndex]), xycoords='data',
+                                      xytext=(0, 72), textcoords='offset points',
+                                      arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                      patchB=None))
+                an1.draggable()
+            else:
+                an0 = axs.annotate(str(abs(michaelSnContent)),
+                                      xy=(centerTwoTheta + twoThetaOffset, spectrumData.lnIntensity[centerIndex]),
+                                      xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                      arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                      patchB=None))
+                an0.draggable()
 
 
-def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL, out):
-    if isGeSnPL:
+def plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions, out):
+    if setupOptions.isGeSnPL:
         for centerEnergy in np.asarray(centerXValsList):
             directSnContent = max(round(100 * DirectBandgap_To_SnContent(centerEnergy), 1), 0)
             indirectSnContent = max(round(100 * IndirectBandgap_To_SnContent(centerEnergy), 1), 0)
@@ -627,12 +636,14 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, isGeSnPL, out):
                                   arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                   patchB=None))
             an0.draggable()
-            an1 = axs[1].annotate(str(directSnContent) + ", " + str(indirectSnContent),
-                                  xy=(centerEnergy, spectrumData.bgSubIntensity[centerIndex]),
-                                  xycoords='data', xytext=(0, 72), textcoords='offset points',
-                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                                  patchB=None))
-            an1.draggable()
+
+            if setupOptions.doBackgroundSubtraction:
+                an1 = axs[1].annotate(str(directSnContent) + ", " + str(indirectSnContent),
+                                      xy=(centerEnergy, spectrumData.bgSubIntensity[centerIndex]),
+                                      xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                      arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                      patchB=None))
+                an1.draggable()
     spectrumData.signalToNoise = np.mean(out.best_fit/np.abs(out.residual))
 
 
@@ -641,31 +652,47 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     isXRD = setupOptions.isXRD
     (modelList, paramList), fittingCoordsList = splitMultiFitModels(roiCoordsList, multiRegionCoordsList,
                                                                     setupOptions.modelType[0])
-    fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
-    if isXRD:
-        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$',
-                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
-        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='',
-                  setupOptions=setupOptions, withTopAxis=True)
-    else:  # isPL
-        plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
-                  plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
-        plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)', plotYLabel='',
-                  setupOptions=setupOptions, withTopAxis=True)
+
     if setupOptions.isLogPlot:
         yVals = spectrumData.lnIntensity
         bgYVals = spectrumData.bgSubIntensity
     else:
         yVals = np.exp(spectrumData.lnIntensity)
         bgYVals = np.exp(spectrumData.bgSubIntensity)
-    axs[0].plot(spectrumData.xVals, yVals, 'k')
-    rawYmin, rawYmax = axs[0].get_ylim()
-    axs[1].plot(spectrumData.xVals, bgYVals, 'b')
-    bgYmin, bgYmax = axs[1].get_ylim()
 
+    if setupOptions.doBackgroundSubtraction:
+        fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
+        if isXRD:
+            plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$',
+                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+            plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='',
+                      setupOptions=setupOptions, withTopAxis=True)
+        else:  # isPL
+            plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
+                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+            plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
+                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        axs[0].plot(spectrumData.xVals, yVals, 'k')
+        axs[1].plot(spectrumData.xVals, bgYVals, 'b')
+        rawYmin, rawYmax = axs[0].get_ylim()
+        bgYmin, bgYmax = axs[1].get_ylim()
+
+
+    else:
+        fig, axs = plt.subplots(ncols=1, figsize=(10, 8), gridspec_kw={'wspace': 0})
+        if isXRD:
+            plotSetup(fig, axs, spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$',
+                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+        else:  # isPL
+            plotSetup(fig, axs, spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
+                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+
+        axs.plot(spectrumData.xVals, yVals, 'k')
+        rawYmin, rawYmax = axs.get_ylim()
     centerXValsList = []
     heightList = []
     out = None
+
     for model, params, subCoords in zip(modelList, paramList, fittingCoordsList):
         out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
         print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
@@ -673,12 +700,23 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
         comps = out.eval_components(x=subCoords['x'])
         if len(comps) > 1:
             for _, component in comps.items():
-                axs[1].plot(subCoords['x'], np.log(component), 'g--')
+                if setupOptions.isLogPlot:
+                    componentYVals = np.log(component)
+                else:
+                    componentYVals = component
+                if setupOptions.doBackgroundSubtraction:
+                    axs[1].plot(subCoords['x'], componentYVals, 'g--')
+                else:
+                    axs.plot(subCoords['x'], componentYVals, 'g--')
         if setupOptions.isLogPlot:
             fitYVals = np.log(out.best_fit)
         else:
             fitYVals = out.best_fit
-        axs[1].plot(subCoords['x'], fitYVals, 'r--')
+        if setupOptions.doBackgroundSubtraction:
+            axs[1].plot(subCoords['x'], fitYVals, 'r--')
+        else:
+            axs.plot(subCoords['x'], fitYVals, 'r--')
+
         for key, value in out.best_values.items():
             if 'center' in key:
                 centerXValsList.append(value)
@@ -687,15 +725,18 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
                 heightList.append(out.params[key].value)
 
     if isXRD:
-        xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs)
+        xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs, setupOptions)
     else:  # isPL
-        plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions.isGeSnPL, out)
+        plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions, out)
 
     print("Results from:", spectrumData.nakedFileName)
     if spectrumData.signalToNoise:
         print("Signal to noise: " + str(spectrumData.signalToNoise))
-    axs[0].set_ylim(bottom=rawYmin, top=rawYmax)
-    axs[1].set_ylim(bottom=bgYmin, top=bgYmax)
+    if setupOptions.doBackgroundSubtraction:
+        axs[0].set_ylim(bottom=rawYmin, top=rawYmax)
+        axs[1].set_ylim(bottom=bgYmin, top=bgYmax)
+    else:
+        axs.set_ylim(bottom=rawYmin, top=rawYmax)
 
     plt.show(block=True)
     plt.close()
