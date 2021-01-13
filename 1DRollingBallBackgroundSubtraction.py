@@ -48,8 +48,8 @@ class SpectrumData:
         self.maxX = max(self.xVals)
         self.xRange = abs(self.maxX - self.minX)
         self.background = None
-        self.bgSubIntensity = None  # ln of intensity
-        self.expBgSubIntensity = None  # Raw intensity
+        self.bgSubIntensity = None  # Background subtracted intensity
+        self.lnBgSubIntensity = None  # ln background subtracted intensity
         self.signalToNoise = None
 
 
@@ -268,13 +268,9 @@ def calculateSingleBackground(measuredAngles, lnIntensities, angleNum, radiussqu
     return ballPoints - backgroundOffset
 
 
-def rollingBallBackground(spectrumData: SpectrumData, rollingBallRatioVal, radius, setupOptions: SetupOptions):
+def rollingBallBackground(spectrumData: SpectrumData, rollingBallRatioVal, radius):
     radiussquared = radius * radius
-    if setupOptions.isLogPlot:
-        yVals = spectrumData.lnIntensity
-    else:
-        yVals = np.exp(spectrumData.lnIntensity)
-    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, yVals, angleNum, radiussquared,
+    allBackgrounds = [calculateSingleBackground(spectrumData.xVals, spectrumData.intensity, angleNum, radiussquared,
                                                 rollingBallRatioVal) for angleNum in range(spectrumData.numXVals)]
     return np.nanmax(allBackgrounds, axis=0)
 
@@ -348,19 +344,23 @@ def plotSetup(fig, ax, fileName: str, windowTitleSuffix: str, plotXLabel: str, p
 
 def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: RollingBall, setupOptions: SetupOptions):
     isXRD = setupOptions.isXRD
-    rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius, setupOptions)
+    rollingBallBackgroundData = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)
     fig, ax = plt.subplots(figsize=(10, 8))
     plt.subplots_adjust(bottom=0.25)
     ax.margins(x=0)
     if setupOptions.isLogPlot:
         yVals = spectrumData.lnIntensity
         yLabel = 'ln(Intensity)'
+        backgroundData = np.log(rollingBallBackgroundData)
+        backgroundSubData = np.log(spectrumData.intensity - rollingBallBackgroundData)
     else:
-        yVals = np.exp(spectrumData.lnIntensity)
+        yVals = spectrumData.intensity
         yLabel = 'Intensity'
+        backgroundData = rollingBallBackgroundData
+        backgroundSubData = spectrumData.intensity - rollingBallBackgroundData
     ax.plot(spectrumData.xVals, yVals, 'k')
-    background, = ax.plot(spectrumData.xVals, rollingBallBackgroundData, 'r--', label="Rolling Ball Background")
-    subtracted, = ax.plot(spectrumData.xVals, yVals - rollingBallBackgroundData, 'b',
+    background, = ax.plot(spectrumData.xVals, backgroundData, 'r--', label="Rolling Ball Background")
+    subtracted, = ax.plot(spectrumData.xVals, backgroundSubData, 'b',
                           label="Background Subtracted")
     plt.legend(loc='best')
     if isXRD:
@@ -393,12 +393,14 @@ def backgroundSubtractionPlotting(spectrumData: SpectrumData, rollingBall: Rolli
     def update(_):
         sRadius.valtext.set_text('{:.1f}'.format(10 ** sRadius.val))
         sRatio.valtext.set_text('{:.1f}'.format(10 ** sRatio.val))
-        rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val, setupOptions)
-        background.set_ydata(rollingBallBackgroundDataUpdate)
+        rollingBallBackgroundDataUpdate = rollingBallBackground(spectrumData, 10 ** sRatio.val, 10 ** sRadius.val)
+
         if setupOptions.isLogPlot:
-            subtracted.set_ydata(spectrumData.lnIntensity - rollingBallBackgroundDataUpdate)
+            background.set_ydata(np.log(rollingBallBackgroundDataUpdate))
+            subtracted.set_ydata(np.log(spectrumData.intensity - rollingBallBackgroundDataUpdate))
         else:
-            subtracted.set_ydata(np.exp(spectrumData.lnIntensity) - rollingBallBackgroundDataUpdate)
+            background.set_ydata(rollingBallBackgroundDataUpdate)
+            subtracted.set_ydata(spectrumData.intensity - rollingBallBackgroundDataUpdate)
         fig.canvas.draw_idle()
 
     sRadius.on_changed(update)
@@ -417,10 +419,10 @@ def fittingRegionSelectionPlotting(spectrumData: SpectrumData, setupOptions: Set
     fig, ax = plt.subplots(figsize=(10, 8))
     if setupOptions.isLogPlot:
         yLabel = 'ln(Intensity)'
-        yVals = spectrumData.bgSubIntensity
+        yVals = spectrumData.lnBgSubIntensity
     else:
         yLabel = 'Intensity'
-        yVals = np.exp(spectrumData.bgSubIntensity)
+        yVals = spectrumData.bgSubIntensity
 
     if setupOptions.isXRD:
         plotSetup(fig, ax, spectrumData.nakedFileName, 'PeakFitting', plotXLabel='$2\\theta$',
@@ -516,7 +518,7 @@ def prepareFittingModels(roiCoordsList, modelType):
             index += 1
             # pull info out of region dict
             selectedXVals = entry['x']
-            selectedYVals = np.exp(entry['y'])
+            selectedYVals = entry['y']
 
             mod = None
             if modelType.lower() == 'voigt':
@@ -581,8 +583,8 @@ def splitMultiFitModels(roiCoordsList, multiRegionCoordsList, modelType: str):
 def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs, setupOptions):
     proposedUserSubstrateTwoTheta = centerXValsList[heightList.index(max(heightList))]
     substrateModel = VoigtModel()
-    params = substrateModel.guess(spectrumData.expBgSubIntensity, x=spectrumData.xVals, negative=False)
-    out = substrateModel.fit(spectrumData.expBgSubIntensity, params, x=spectrumData.xVals)
+    params = substrateModel.guess(spectrumData.bgSubIntensity, x=spectrumData.xVals, negative=False)
+    out = substrateModel.fit(spectrumData.bgSubIntensity, params, x=spectrumData.xVals)
     fullModelSubstrateTwoTheta = out.best_values['center']
     if abs(fullModelSubstrateTwoTheta - proposedUserSubstrateTwoTheta) <= 0.1:
         # looks like the user selected the substrate as a peak, use their value
@@ -600,26 +602,33 @@ def xrdCalculationProcessing(spectrumData, centerXValsList, heightList, axs, set
         print("Zach Comp:", round(calculateXRDSnContent_Zach(centerTwoTheta), 1))
         if abs(centerTwoTheta - literatureSubstrateTwoTheta) > 0.05:  # Don't draw one for the substrate
             _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerTwoTheta + twoThetaOffset)
+            if setupOptions.isLogPlot:
+                basePlot = spectrumData.lnIntensity
+                subtractedPlot = spectrumData.lnBgSubIntensity
+            else:
+                basePlot = spectrumData.intensity
+                subtractedPlot = spectrumData.bgSubIntensity
             if setupOptions.doBackgroundSubtraction:
+
                 an0 = axs[0].annotate(str(abs(michaelSnContent)),
-                                      xy=(centerTwoTheta + twoThetaOffset, spectrumData.lnIntensity[centerIndex]),
+                                      xy=(centerTwoTheta + twoThetaOffset, basePlot[centerIndex]),
                                       xycoords='data', xytext=(0, 72), textcoords='offset points',
                                       arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                       patchB=None))
                 an0.draggable()
 
                 an1 = axs[1].annotate(str(abs(michaelSnContent)), xy=(
-                    centerTwoTheta + twoThetaOffset, spectrumData.bgSubIntensity[centerIndex]), xycoords='data',
+                    centerTwoTheta + twoThetaOffset, subtractedPlot[centerIndex]), xycoords='data',
                                       xytext=(0, 72), textcoords='offset points',
                                       arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                       patchB=None))
                 an1.draggable()
             else:
                 an0 = axs.annotate(str(abs(michaelSnContent)),
-                                      xy=(centerTwoTheta + twoThetaOffset, spectrumData.lnIntensity[centerIndex]),
-                                      xycoords='data', xytext=(0, 72), textcoords='offset points',
-                                      arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                                      patchB=None))
+                                   xy=(centerTwoTheta + twoThetaOffset, subtractedPlot[centerIndex]),
+                                   xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                   arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                   patchB=None))
                 an0.draggable()
 
 
@@ -630,20 +639,33 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions, ou
             indirectSnContent = max(round(100 * IndirectBandgap_To_SnContent(centerEnergy), 1), 0)
             print("Sn Composition - Direct: ", directSnContent, " Indirect: ", indirectSnContent)
             _, centerIndex = closestNumAndIndex(spectrumData.xVals, centerEnergy)
-            an0 = axs[0].annotate(str(directSnContent) + ", " + str(indirectSnContent),
-                                  xy=(centerEnergy, spectrumData.lnIntensity[centerIndex]),
-                                  xycoords='data', xytext=(0, 72), textcoords='offset points',
-                                  arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
-                                                  patchB=None))
-            an0.draggable()
+            if setupOptions.isLogPlot:
+                basePlot = spectrumData.lnIntensity
+                backgroundSubtracted = spectrumData.lnBgSubIntensity
+            else:
+                basePlot = spectrumData.intensity
+                backgroundSubtracted = spectrumData.bgSubIntensity
 
             if setupOptions.doBackgroundSubtraction:
+                an0 = axs[0].annotate(str(directSnContent) + ", " + str(indirectSnContent),
+                                      xy=(centerEnergy, basePlot[centerIndex]),
+                                      xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                      arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                      patchB=None))
+                an0.draggable()
                 an1 = axs[1].annotate(str(directSnContent) + ", " + str(indirectSnContent),
-                                      xy=(centerEnergy, spectrumData.bgSubIntensity[centerIndex]),
+                                      xy=(centerEnergy, backgroundSubtracted[centerIndex]),
                                       xycoords='data', xytext=(0, 72), textcoords='offset points',
                                       arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                       patchB=None))
                 an1.draggable()
+            else:
+                an0 = axs.annotate(str(directSnContent) + ", " + str(indirectSnContent),
+                                   xy=(centerEnergy, basePlot[centerIndex]),
+                                   xycoords='data', xytext=(0, 72), textcoords='offset points',
+                                   arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
+                                                   patchB=None))
+                an0.draggable()
     spectrumData.signalToNoise = np.mean(out.best_fit/np.abs(out.residual))
 
 
@@ -655,37 +677,38 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
 
     if setupOptions.isLogPlot:
         yVals = spectrumData.lnIntensity
-        bgYVals = spectrumData.bgSubIntensity
+        bgYVals = spectrumData.lnBgSubIntensity
+        yLabel = 'ln(Intensity)'
     else:
-        yVals = np.exp(spectrumData.lnIntensity)
-        bgYVals = np.exp(spectrumData.bgSubIntensity)
+        yVals = spectrumData.intensity
+        bgYVals = spectrumData.bgSubIntensity
+        yLabel = 'Intensity'
 
     if setupOptions.doBackgroundSubtraction:
         fig, axs = plt.subplots(ncols=2, figsize=(10, 8), gridspec_kw={'wspace': 0})
         if isXRD:
             plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$',
-                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                      plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
             plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$', plotYLabel='',
                       setupOptions=setupOptions, withTopAxis=True)
         else:  # isPL
             plotSetup(fig, axs[0], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
-                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                      plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
             plotSetup(fig, axs[1], spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
-                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                      plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
         axs[0].plot(spectrumData.xVals, yVals, 'k')
         axs[1].plot(spectrumData.xVals, bgYVals, 'b')
         rawYmin, rawYmax = axs[0].get_ylim()
         bgYmin, bgYmax = axs[1].get_ylim()
 
-
     else:
         fig, axs = plt.subplots(ncols=1, figsize=(10, 8), gridspec_kw={'wspace': 0})
         if isXRD:
             plotSetup(fig, axs, spectrumData.nakedFileName, 'FittingResults', plotXLabel='$2\\theta$',
-                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                      plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
         else:  # isPL
             plotSetup(fig, axs, spectrumData.nakedFileName, 'FittingResults', plotXLabel='Energy (eV)',
-                      plotYLabel='ln(Intensity)', setupOptions=setupOptions, withTopAxis=True)
+                      plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
 
         axs.plot(spectrumData.xVals, yVals, 'k')
         rawYmin, rawYmax = axs.get_ylim()
@@ -694,7 +717,7 @@ def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, mu
     out = None
 
     for model, params, subCoords in zip(modelList, paramList, fittingCoordsList):
-        out = model.fit(np.exp(subCoords['y']), params, x=subCoords['x'])
+        out = model.fit(subCoords['y'], params, x=subCoords['x'])
         print("Minimum center:", min(subCoords['x']), "Maximum center:", max(subCoords['x']))
         print(out.fit_report(min_correl=0.25))
         comps = out.eval_components(x=subCoords['x'])
@@ -891,8 +914,8 @@ def main():
         spectrumData.background = rollingBallBackground(spectrumData, rollingBall.ratio, rollingBall.radius)  # Store the rolling ball background in the SpectrumData object
     else:
         spectrumData.background = list(np.zeros(spectrumData.numXVals))  # Have a zero background, for compatibility with subsequent code
-    spectrumData.bgSubIntensity = spectrumData.lnIntensity - spectrumData.background  # Store the background subtracted intensity (natural log) in the SpectrumData object
-    spectrumData.expBgSubIntensity = np.exp(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (as measured) in the SpectrumData object
+    spectrumData.bgSubIntensity = spectrumData.intensity - spectrumData.background  # Store the background subtracted intensity in the SpectrumData object
+    spectrumData.lnBgSubIntensity = np.log(spectrumData.bgSubIntensity)  # Store the background subtracted intensity (natural log) in the SpectrumData object
     roiCoordsList, multiRegionCoordsList = fittingRegionSelectionPlotting(spectrumData, setupOptions)  # Interactive region of interest (ROI) selection for fitting
     snContentFittingPlotting(spectrumData, roiCoordsList, multiRegionCoordsList, setupOptions)  # Plot, fit, do PL/CL or XRD specific corrections, and display Sn Contents
 
