@@ -666,7 +666,7 @@ def plCalculationProcessing(spectrumData, centerXValsList, axs, setupOptions, ou
                                    arrowprops=dict(arrowstyle="->", shrinkA=10, shrinkB=5, patchA=None,
                                                    patchB=None))
                 an0.draggable()
-    spectrumData.signalToNoise = np.mean(out.best_fit/np.abs(out.residual))
+    spectrumData.signalToNoise = 1/np.mean(np.abs(out.residual)/out.best_fit)
 
 
 def snContentFittingPlotting(spectrumData: SpectrumData, roiCoordsList: list, multiRegionCoordsList: list,
