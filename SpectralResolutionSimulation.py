@@ -13,6 +13,7 @@ import matplotlib.patches as patches
 from matplotlib.widgets import Slider, SpanSelector, Button
 from matplotlib.ticker import AutoMinorLocator
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
 from bisect import bisect_left
 
 planck = 4.135667696 * (10 ** -15)  # eV * s
@@ -36,8 +37,11 @@ class SpectrumData:
         self.maxX = max(self.xVals)
         self.xRange = abs(self.maxX - self.minX)
         self.background = None
-        self.interpolatedXVals = np.linspace(self.minX, self.maxX, num=10000, endpoint=True)
+        self.numInterpolatedXVals = 1000
+        self.interpolatedXVals = np.linspace(self.minX, self.maxX, num=self.numInterpolatedXVals, endpoint=True)
+        # self.interpolationFunction = interp1d(self.xVals, savgol_filter(self.intensity, 9, 2), kind='cubic')
         self.interpolationFunction = interp1d(self.xVals, self.intensity, kind='cubic')
+
         self.interpolatedIntensity = self.interpolationFunction(self.interpolatedXVals)
 
 
@@ -135,7 +139,7 @@ def calculateSingleAveragedWavelength(wavelengths, intensities, centerSlice, wav
 
 
 def simulatedSpectra(spectrumData: SpectrumData, wavelengthWindow):
-    simulatedSpectraData = [calculateSingleAveragedWavelength(spectrumData.xVals, spectrumData.intensity, centerSlice, wavelengthWindow) for centerSlice in range(spectrumData.numXVals)]
+    simulatedSpectraData = [calculateSingleAveragedWavelength(spectrumData.interpolatedXVals, spectrumData.interpolatedIntensity, centerSlice, wavelengthWindow) for centerSlice in range(spectrumData.numInterpolatedXVals)]
     return simulatedSpectraData
 
 
@@ -184,11 +188,11 @@ def SimulatedSpectraPlotting(spectrumData: SpectrumData, virtualSlit: VirtualSli
     plt.subplots_adjust(bottom=0.15)
     ax.margins(x=0)
 
-    yVals = spectrumData.intensity
+    yVals = spectrumData.interpolatedIntensity
     yLabel = 'Intensity'
 
-    ax.plot(spectrumData.xVals, yVals, 'k')
-    simulated, = ax.plot(spectrumData.xVals, simulatedSpectraData, 'b', label="Simulated")
+    ax.plot(spectrumData.interpolatedXVals, yVals, 'k')
+    simulated, = ax.plot(spectrumData.interpolatedXVals, simulatedSpectraData, 'b', label="Simulated")
     plt.legend(loc='best')
     # plotSetup(fig, ax, spectrumData.nakedFileName, 'SimulatedResolution', plotXLabel='Energy (eV)', plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
     plotSetup(fig, ax, spectrumData.nakedFileName, 'SimulatedResolution', plotXLabel='Energy (eV)',
