@@ -37,7 +37,7 @@ class SpectrumData:
         self.maxX = max(self.xVals)
         self.xRange = abs(self.maxX - self.minX)
         self.background = None
-        self.numInterpolatedXVals = 1000
+        self.numInterpolatedXVals = 10001
         self.interpolatedXVals = np.linspace(self.minX, self.maxX, num=self.numInterpolatedXVals, endpoint=True)
         # self.interpolationFunction = interp1d(self.xVals, savgol_filter(self.intensity, 9, 2), kind='cubic')
         self.interpolationFunction = interp1d(self.xVals, self.intensity, kind='cubic')
