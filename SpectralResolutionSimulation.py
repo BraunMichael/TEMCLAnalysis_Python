@@ -45,10 +45,10 @@ class SpectrumData:
         self.interpolatedIntensity = self.interpolationFunction(self.interpolatedXVals)
 
 
-
 class SetupOptions:
     def __init__(self):
         self.dataFilePath = ''
+        self.isNormalized = False
 
 
 SMALL_SIZE = 18
@@ -189,6 +189,8 @@ def SimulatedSpectraPlotting(spectrumData: SpectrumData, virtualSlit: VirtualSli
     ax.margins(x=0)
 
     yVals = spectrumData.interpolatedIntensity
+    if setupOptions.isNormalized:
+        yVals = yVals/np.max(yVals)
     yLabel = 'Intensity'
 
     ax.plot(spectrumData.interpolatedXVals, yVals, 'k')
@@ -205,7 +207,10 @@ def SimulatedSpectraPlotting(spectrumData: SpectrumData, virtualSlit: VirtualSli
     def update(_):
         sWidth.valtext.set_text('{:.1f}'.format(sWidth.val))
         simulatedSpectraDataUpdate = simulatedSpectra(spectrumData, sWidth.val)
-        simulated.set_ydata(simulatedSpectraDataUpdate)
+        if setupOptions.isNormalized:
+            simulated.set_ydata(simulatedSpectraDataUpdate/np.max(simulatedSpectraDataUpdate))
+        else:
+            simulated.set_ydata(simulatedSpectraDataUpdate)
         fig.canvas.draw_idle()
 
     sWidth.on_changed(update)
@@ -252,8 +257,9 @@ def get_setupOptions():
     return setupOptions
 
 
-def on_closing(win, setupOptions, dataFileEntryText):
+def on_closing(win, setupOptions, dataFileEntryText, isNormalized):
     setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
+    setupOptions.isNormalized = isNormalized.get()
     with open('SetupOptionsJSON_SpectralResolutionSimulation.txt', 'w') as outfile:
         json.dump(jsonpickle.encode(setupOptions), outfile)
     win.destroy()
@@ -262,6 +268,7 @@ def on_closing(win, setupOptions, dataFileEntryText):
 def uiInput(win, setupOptions):
     win.title("Spectrum Data Processing Setup UI")
     dataFileEntryText = tkinter.StringVar(value=setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~'))
+    isNormalized = tkinter.BooleanVar(value=setupOptions.isNormalized)
 
     tkinter.Label(win, text="Data File:").grid(row=0, column=0)
     dataFileEntry = tkinter.Entry(win, textvariable=dataFileEntryText)
@@ -271,7 +278,14 @@ def uiInput(win, setupOptions):
                                     command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File'))
     dataFileButton.grid(row=1, column=1)
 
-    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText))
+    item_Label = tkinter.Label(win, text="Plot in Normalized Scale?", name='isNormalized_Label')
+    item_Label.grid(row=2, column=0)
+    r1isNormalized = tkinter.Radiobutton(win, text="Yes", variable=isNormalized, value=1, name='isNormalized_YesButton')
+    r2isNormalized = tkinter.Radiobutton(win, text="No", variable=isNormalized, value=0, name='isNormalized_NoButton')
+    r1isNormalized.grid(row=2, column=1)
+    r2isNormalized.grid(row=2, column=2)
+
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, isNormalized))
     win.mainloop()
 
 
