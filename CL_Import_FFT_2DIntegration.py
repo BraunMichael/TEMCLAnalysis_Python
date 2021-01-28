@@ -1,3 +1,11 @@
+import os
+import re
+import math
+import json
+import warnings
+import jsonpickle
+import tkinter
+from tkinter import Tk, filedialog
 import numpy as np
 from matplotlib.path import Path
 import matplotlib.pyplot as plt
@@ -23,6 +31,7 @@ from tqdm import tqdm
 num_cores = multiprocessing.cpu_count()
 
 
+
 # User adjustable parameters
 saveFigures = False
 pixelScale = 49  # nm per pixel
@@ -33,11 +42,6 @@ averagedSlices = 5  # Averaged wavelengths per center wavelength (symmetric)
 gaussianSigma = 1
 windowSize = 3
 truncateWindow = (((windowSize - 1) / 2) - 0.5) / gaussianSigma
-# rawCL = np.loadtxt('5min_Sample2.txt')
-rawCL = np.loadtxt('Sample3_60min.txt')
-
-
-# rawCL = np.loadtxt('CL Spectrum Image_12mW_3min_5_feb10.txt')
 
 SMALL_SIZE = 16
 MEDIUM_SIZE = 18
@@ -50,6 +54,86 @@ plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
 plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+class SetupOptions:
+    def __init__(self):
+        self.dataFilePath = ''
+        self.doAlignment = False
+
+
+def getNakedNameFromFilePath(name):
+    head, tail = os.path.split(name)
+    nakedName, fileExtension = os.path.splitext(tail)
+    return nakedName
+
+
+def getFileOrDirList(fileOrFolder: str = 'file', titleStr: str = 'Choose a file', fileTypes: str = None,
+                     initialDirOrFile: str = os.getcwd()):
+    if os.path.isfile(initialDirOrFile) or os.path.isdir(initialDirOrFile):
+        initialDir = os.path.split(initialDirOrFile)[0]
+    else:
+        initialDir = initialDirOrFile
+    root = Tk()
+    root.withdraw()
+    assert fileOrFolder.lower() == 'file' or fileOrFolder.lower() == 'folder', "Only file or folder is an allowed string choice for fileOrFolder"
+    if fileOrFolder.lower() == 'file':
+        fileOrFolderList = filedialog.askopenfilename(initialdir=initialDir, title=titleStr,
+                                                      filetypes=[(fileTypes + "file", fileTypes)])
+    else:  # Must be folder from assert statement
+        fileOrFolderList = filedialog.askdirectory(initialdir=initialDir, title=titleStr)
+    if not fileOrFolderList:
+        fileOrFolderList = initialDirOrFile
+    root.destroy()
+    return fileOrFolderList
+
+
+def get_file(entryField, entryFieldText, titleMessage):
+    listName = getFileOrDirList('folder', titleMessage, '.txt .xy .csv .dat',
+                                entryFieldText.get().replace('~', os.path.expanduser('~')))
+    entryFieldText.set(listName.replace(os.path.expanduser('~'), '~'))
+    entryField.config(width=len(listName.replace(os.path.expanduser('~'), '~')))
+
+
+def get_setupOptions():
+    try:
+        with open('SetupOptionsJSON_CLanalysis.txt') as infile:
+            inputFile = json.load(infile)
+        setupOptions = jsonpickle.decode(inputFile)
+    except FileNotFoundError:
+        setupOptions = SetupOptions()
+    return setupOptions
+
+
+def on_closing(win, setupOptions, dataFileEntryText, doAlignment):
+    setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
+    setupOptions.doAlignment = doAlignment.get()
+    with open('SetupOptionsJSON_CLanalysis.txt', 'w') as outfile:
+        json.dump(jsonpickle.encode(setupOptions), outfile)
+    win.destroy()
+
+
+def uiInput(win, setupOptions):
+    win.title("Spectrum Data Processing Setup UI")
+    dataFileEntryText = tkinter.StringVar(value=setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~'))
+    doAlignment = tkinter.BooleanVar(value=setupOptions.doAlignment)
+
+    tkinter.Label(win, text="Data File:").grid(row=0, column=0)
+    dataFileEntry = tkinter.Entry(win, textvariable=dataFileEntryText)
+    dataFileEntry.grid(row=1, column=0)
+    dataFileEntry.config(width=len(setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~')))
+    dataFileButton = tkinter.Button(win, text='Choose File',
+                                    command=lambda: get_file(dataFileEntry, dataFileEntryText, 'Choose Data File'))
+    dataFileButton.grid(row=1, column=1)
+
+    item_Label = tkinter.Label(win, text="Perform Image Stack Alignment?", name='doAlignment_Label')
+    item_Label.grid(row=2, column=0)
+    r1doAlignment = tkinter.Radiobutton(win, text="Yes", variable=doAlignment, value=1, name='doAlignment_YesButton')
+    r2doAlignment = tkinter.Radiobutton(win, text="No", variable=doAlignment, value=0, name='doAlignment_NoButton')
+    r1doAlignment.grid(row=2, column=1)
+    r2doAlignment.grid(row=2, column=2)
+
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, doAlignment))
+    win.mainloop()
 
 
 def setAxisTicks(axisHandle, secondaryAxis=False):
@@ -279,257 +363,268 @@ class FFTManager:
         self.fig.canvas.draw()
 
 
-
+setupOptions = get_setupOptions()  # Read previously used setupOptions
+uiInput(Tk(), setupOptions)  # UI to set configuration and get the input data files, takes the first 2 columns of a text, csv, dat, or xy file, string headers are ok and will be ignored
 wavelengthsRaw = np.loadtxt('Spectrum_WavelengthInfo.txt', delimiter=', ')
 wavelengths = wavelengthsRaw[:, 0]
-assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
-frameNum = int(len(wavelengths)/2)
 
-assert averagedSlices % 2 == 1, "Only odd numbers of averaged wavelengths allowed to simplify calculations/meaning of averaged wavelengths"
-out = np.reshape(rawCL.flatten(), (len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
-outAveraged = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
-outAveragedBlurred = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
-for centerSlice in range(len(wavelengths)):
-    lowerSlice = max(0, centerSlice - int(((averagedSlices - 1) / 2)))
-    upperSlice = min(len(wavelengths)-1, centerSlice + int(((averagedSlices - 1) / 2)))
-    outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
-    # outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
-outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
+(dirpath, dirnames, rawFileNames) = next(os.walk(setupOptions.dataFilePath))
+fileNames = []
 
+for name in rawFileNames:
+    if name.endswith(".txt"):
+        fileNames.append(os.path.join(dirpath, name))
+for currentFile in fileNames:
+    nakedRawFileName = getNakedNameFromFilePath(currentFile)
+    rawCL = np.loadtxt(currentFile)
+    assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
+    frameNum = int(len(wavelengths)/2)
 
-fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]),
-                     cmap='plasma', norm=LogNorm())
-plt.subplots_adjust(bottom=0.18)
-ax.margins(x=0)
-plt.axis('equal')
-axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
-sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=int(len(wavelengths)/2), valfmt='%0.0f')
-sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths)/2)]))
+    assert averagedSlices % 2 == 1, "Only odd numbers of averaged wavelengths allowed to simplify calculations/meaning of averaged wavelengths"
+    out = np.reshape(rawCL.flatten(), (len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
+    outAveraged = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
+    outAveragedBlurred = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
+    for centerSlice in range(len(wavelengths)):
+        lowerSlice = max(0, centerSlice - int(((averagedSlices - 1) / 2)))
+        upperSlice = min(len(wavelengths)-1, centerSlice + int(((averagedSlices - 1) / 2)))
+        outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
+        # outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
+    outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
 
 
-def update(_):
-    sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
-    CLimage.set_data(outAveraged[int(sSlice.val), :, :])
-    CLimage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
-    CLimage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
-    fig.canvas.draw_idle()
+    fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]),
+                         cmap='plasma', norm=LogNorm())
+    plt.subplots_adjust(bottom=0.18)
+    ax.margins(x=0)
+    plt.axis('equal')
+    axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
+    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=int(len(wavelengths)/2), valfmt='%0.0f')
+    sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths)/2)]))
 
 
-sSlice.on_changed(update)
-
-imageHandler = ImageHandler()
-imageHandler.xMax = outAveraged.shape[1]
-imageHandler.yMax = outAveraged.shape[2]
-
-
-def PolySelection(polygonVertices):
-    polygonVertices = [(min(max(0, entry[0]), imageHandler.xMax), min(max(0, entry[1]), imageHandler.yMax)) for entry in polygonVertices]
-    xPoints, yPoints = np.meshgrid(np.arange(outAveraged.shape[2]), np.arange(outAveraged.shape[1]))
-    xPoints, yPoints = xPoints.flatten(), yPoints.flatten()
-
-    points = np.vstack((xPoints, yPoints)).T
-    polyPath = Path(polygonVertices)
-    imageMask = polyPath.contains_points(points)
-    imageHandler.imageMask = imageMask.reshape((outAveraged.shape[1], outAveraged.shape[2]))
-    imageHandler.boundaryPoly = polyPath
+    def update(_):
+        sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
+        CLimage.set_data(outAveraged[int(sSlice.val), :, :])
+        CLimage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
+        CLimage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
+        fig.canvas.draw_idle()
 
 
-poly = PolygonSelector(ax, PolySelection)
+    sSlice.on_changed(update)
 
-plt.show()
-plt.close()
-#
-#
-outAveraged = outAveraged * imageHandler.imageMask + 1
-
-for centerSlice in range(len(wavelengths)):
-    CLFrame = outAveraged[centerSlice, :, :]
-    backgroundPoints = getBackgroundPoints(CLFrame, 0.01)
-    backgroundAverage = np.mean(backgroundPoints)
-    outAveragedBlurred[centerSlice, :, :] = gaussian_filter(CLFrame, sigma=gaussianSigma, truncate=truncateWindow) + backgroundAverage/2
-
-outAveragedBlurred = outAveragedBlurred * imageHandler.imageMask + 1
-
-# Looping Peak Finding
-xPeakCoordsDict = {}
-yPeakCoordsDict = {}
-xPeakCoordsBlurredDict = {}
-yPeakCoordsBlurredDict = {}
-NNDict = {}
-NNBlurredDict = {}
-firstNNDict = {}
-firstNNBlurredDict = {}
-pdfXValues = list(range(0, 1001))
-for wavelengthIndex in range(len(wavelengths)):
-    wavelength = wavelengths[wavelengthIndex]
-
-    xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength] = findPeaks(outAveraged[wavelengthIndex, :, :], pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
-    xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength] = findPeaks(outAveragedBlurred[wavelengthIndex, :, :], pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
-
-    # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
-    NNDict[wavelength] = getNearestNeighborDistances(xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength])
-    NNBlurredDict[wavelength] = getNearestNeighborDistances(xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength])
-
-    # This is non blurred only right now
-    firstNNDict[wavelength] = []
-    for peak in NNDict[wavelength]:
-        firstNNDict[wavelength].append(peak[0])
+    imageHandler = ImageHandler()
+    imageHandler.xMax = outAveraged.shape[1]
+    imageHandler.yMax = outAveraged.shape[2]
 
 
-# Only does non-blurred right now
-if saveFigures:
-    with tqdm_joblib(tqdm(desc="Saving Nearest Neighbor Graphs", total=len(wavelengths))) as progress_bar:
-        joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNDict, pdfXValues, wavelength) for wavelength in wavelengths)
+    def PolySelection(polygonVertices):
+        polygonVertices = [(min(max(0, entry[0]), imageHandler.xMax), min(max(0, entry[1]), imageHandler.yMax)) for entry in polygonVertices]
+        xPoints, yPoints = np.meshgrid(np.arange(outAveraged.shape[2]), np.arange(outAveraged.shape[1]))
+        xPoints, yPoints = xPoints.flatten(), yPoints.flatten()
 
-fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
-plt.subplots_adjust(bottom=0.18)
-CLImage = axs[0].imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
-axs[0].margins(x=0, y=0)
-
-CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
-manager = plt.get_current_fig_manager()
-manager.window.maximize()
-axs[1].margins(x=0, y=0)
-axs[0].axis('equal')
-axs[1].axis('equal')
-axs[0].set_adjustable('box')
-axs[1].set_adjustable('box')
-axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
-sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=int(len(wavelengths) / 2), valfmt='%0.0f')
-sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths) / 2)]))
+        points = np.vstack((xPoints, yPoints)).T
+        polyPath = Path(polygonVertices)
+        imageMask = polyPath.contains_points(points)
+        imageHandler.imageMask = imageMask.reshape((outAveraged.shape[1], outAveraged.shape[2]))
+        imageHandler.boundaryPoly = polyPath
 
 
-def update(_):
-    sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
-    CLImage.set_data(outAveraged[int(sSlice.val), :, :])
-    CLImage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
-    CLImage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
-    CLImagePeaks.set_data(xPeakCoordsDict[wavelengths[int(sSlice.val)]]/pixelScale, yPeakCoordsDict[wavelengths[int(sSlice.val)]]/pixelScale)
+    poly = PolygonSelector(ax, PolySelection)
 
-    CLImageBlurred.set_data(outAveragedBlurred[int(sSlice.val), :, :])
-    CLImageBlurred.vmin = np.min(outAveragedBlurred[int(sSlice.val), :, :])
-    CLImageBlurred.vmax = np.max(outAveragedBlurred[int(sSlice.val), :, :])
-    CLImageBlurredPeaks.set_data(xPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]]/pixelScale)
-    fig.canvas.draw_idle()
+    plt.show()
+    plt.close()
+    #
+    #
+    outAveraged = outAveraged * imageHandler.imageMask + 1
+
+    for centerSlice in range(len(wavelengths)):
+        CLFrame = outAveraged[centerSlice, :, :]
+        backgroundPoints = getBackgroundPoints(CLFrame, 0.01)
+        backgroundAverage = np.mean(backgroundPoints)
+        outAveragedBlurred[centerSlice, :, :] = gaussian_filter(CLFrame, sigma=gaussianSigma, truncate=truncateWindow) + backgroundAverage/2
+
+    outAveragedBlurred = outAveragedBlurred * imageHandler.imageMask + 1
+
+    # Looping Peak Finding
+    xPeakCoordsDict = {}
+    yPeakCoordsDict = {}
+    xPeakCoordsBlurredDict = {}
+    yPeakCoordsBlurredDict = {}
+    NNDict = {}
+    NNBlurredDict = {}
+    firstNNDict = {}
+    firstNNBlurredDict = {}
+    pdfXValues = list(range(0, 1001))
+    for wavelengthIndex in range(len(wavelengths)):
+        wavelength = wavelengths[wavelengthIndex]
+
+        xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength] = findPeaks(outAveraged[wavelengthIndex, :, :], pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
+        xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength] = findPeaks(outAveragedBlurred[wavelengthIndex, :, :], pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
+
+        # peaks, idmap, promap, parentmap = getProminence(CLFrame, 0.2, min_area=None, include_edge=True)
+        NNDict[wavelength] = getNearestNeighborDistances(xPeakCoordsDict[wavelength], yPeakCoordsDict[wavelength])
+        NNBlurredDict[wavelength] = getNearestNeighborDistances(xPeakCoordsBlurredDict[wavelength], yPeakCoordsBlurredDict[wavelength])
+
+        # This is non blurred only right now
+        firstNNDict[wavelength] = []
+        for peak in NNDict[wavelength]:
+            firstNNDict[wavelength].append(peak[0])
 
 
-sSlice.on_changed(update)
-plt.show()
-plt.close()
+    # Only does non-blurred right now
+    if saveFigures:
+        with tqdm_joblib(tqdm(desc="Saving Nearest Neighbor Graphs", total=len(wavelengths))) as progress_bar:
+            joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNDict, pdfXValues, wavelength) for wavelength in wavelengths)
+
+    fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
+    plt.subplots_adjust(bottom=0.18)
+    CLImage = axs[0].imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
+    CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
+    axs[0].margins(x=0, y=0)
+
+    CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
+    CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
+    manager = plt.get_current_fig_manager()
+    manager.window.maximize()
+    axs[1].margins(x=0, y=0)
+    axs[0].axis('equal')
+    axs[1].axis('equal')
+    axs[0].set_adjustable('box')
+    axs[1].set_adjustable('box')
+    axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
+    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=int(len(wavelengths) / 2), valfmt='%0.0f')
+    sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths) / 2)]))
 
 
-# FFT Work
-fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-plt.subplots_adjust(bottom=0.18)
-ax.margins(x=0)
-plt.axis('equal')
-axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
-sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=int(len(wavelengths)/2), valfmt='%0.0f')
-sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths)/2)]))
+    def update(_):
+        sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
+        CLImage.set_data(outAveraged[int(sSlice.val), :, :])
+        CLImage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
+        CLImage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
+        CLImagePeaks.set_data(xPeakCoordsDict[wavelengths[int(sSlice.val)]]/pixelScale, yPeakCoordsDict[wavelengths[int(sSlice.val)]]/pixelScale)
+
+        CLImageBlurred.set_data(outAveragedBlurred[int(sSlice.val), :, :])
+        CLImageBlurred.vmin = np.min(outAveragedBlurred[int(sSlice.val), :, :])
+        CLImageBlurred.vmax = np.max(outAveragedBlurred[int(sSlice.val), :, :])
+        CLImageBlurredPeaks.set_data(xPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[int(sSlice.val)]]/pixelScale)
+        fig.canvas.draw_idle()
 
 
-def update(_):
-    sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
-    CLimage.set_data(outAveraged[int(sSlice.val), :, :])
-    CLimage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
-    CLimage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
-    fig.canvas.draw_idle()
+    sSlice.on_changed(update)
+    plt.show()
+    plt.close()
 
 
-sSlice.on_changed(update)
+    # FFT Work
+    fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
+    plt.subplots_adjust(bottom=0.18)
+    ax.margins(x=0)
+    plt.axis('equal')
+    axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
+    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=int(len(wavelengths)/2), valfmt='%0.0f')
+    sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths)/2)]))
 
-fftManager = FFTManager(fig, ax)
-axFFT = plt.axes([0.7, 0.02, 0.2, 0.075])
-bFFT = Button(axFFT, 'Calc FFT')
-rect = RectangleSelector(ax, fftManager.RangeSelection, drawtype='box', rectprops=dict(facecolor='none', edgecolor='red', alpha=0.5, fill=False))
-bFFT.on_clicked(fftManager.FFTButtonClicked)
 
-plt.show()
-centerSliceIndex = int(sSlice.val)
-centerWavelengthValue = wavelengths[centerSliceIndex]
-coordsOut = fftManager.coords
-plt.close()
-xMin = int(round(coordsOut['x'][0]))
-xMax = int(round(coordsOut['x'][1]))
-yMin = int(round(coordsOut['y'][0]))
-yMax = int(round(coordsOut['y'][1]))
-print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
-print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
-if abs((xMax-xMin) - (yMax-yMin)) == 1:
-    print('trying to fix it')
-    if abs(xMax-xMin) > abs(yMax-yMin):
-        print('case 1')
-        if yMin == 0:
-            yMax -= 1
-            print('ymax-1')
+    def update(_):
+        sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
+        CLimage.set_data(outAveraged[int(sSlice.val), :, :])
+        CLimage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
+        CLimage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
+        fig.canvas.draw_idle()
+
+
+    sSlice.on_changed(update)
+
+    fftManager = FFTManager(fig, ax)
+    axFFT = plt.axes([0.7, 0.02, 0.2, 0.075])
+    bFFT = Button(axFFT, 'Calc FFT')
+    rect = RectangleSelector(ax, fftManager.RangeSelection, drawtype='box', rectprops=dict(facecolor='none', edgecolor='red', alpha=0.5, fill=False))
+    bFFT.on_clicked(fftManager.FFTButtonClicked)
+
+    plt.show()
+    centerSliceIndex = int(sSlice.val)
+    centerWavelengthValue = wavelengths[centerSliceIndex]
+    coordsOut = fftManager.coords
+    plt.close()
+    xMin = int(round(coordsOut['x'][0]))
+    xMax = int(round(coordsOut['x'][1]))
+    yMin = int(round(coordsOut['y'][0]))
+    yMax = int(round(coordsOut['y'][1]))
+    print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
+    print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
+    if abs((xMax-xMin) - (yMax-yMin)) == 1:
+        print('trying to fix it')
+        if abs(xMax-xMin) > abs(yMax-yMin):
+            print('case 1')
+            if yMin == 0:
+                yMax -= 1
+                print('ymax-1')
+            else:
+                yMin -= 1
+                print('ymin-1')
+
         else:
-            yMin -= 1
-            print('ymin-1')
+            print('case 2')
+            if xMin == 0:
+                xMax -= 1
+                print('xMax - 1')
+            else:
+                xMin -= 1
+                print('xmin-1')
 
-    else:
-        print('case 2')
-        if xMin == 0:
-            xMax -= 1
-            print('xMax - 1')
-        else:
-            xMin -= 1
-            print('xmin-1')
-
-print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
-print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
-assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
-croppedCL = outAveraged[centerSliceIndex, yMin:yMax, xMin:xMax]
+    print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
+    print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
+    assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
+    croppedCL = outAveraged[centerSliceIndex, yMin:yMax, xMin:xMax]
 
 
-# TODO: Not sure which to use, try integrating all of them
+    # TODO: Not sure which to use, try integrating all of them
 
-fftCroppedCL = abs(np.fft.fftshift(np.fft.fft2(croppedCL)))
-fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
+    fftCroppedCL = abs(np.fft.fftshift(np.fft.fft2(croppedCL)))
+    fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
 
-centerFFTCoords = np.unravel_index(np.argmax(fftCroppedCL, axis=None), fftCroppedCL.shape)
-radialProfile = radial_profile(fftCroppedCL, centerFFTCoords)
-radialLogProfile = radial_profile(fftLogCroppedCL, centerFFTCoords)
+    centerFFTCoords = np.unravel_index(np.argmax(fftCroppedCL, axis=None), fftCroppedCL.shape)
+    radialProfile = radial_profile(fftCroppedCL, centerFFTCoords)
+    radialLogProfile = radial_profile(fftLogCroppedCL, centerFFTCoords)
 
-_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma')
-ax.margins(x=0)
-plt.axis('equal')
-plt.show()
+    _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma')
+    ax.margins(x=0)
+    plt.axis('equal')
+    plt.show()
 
-_, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
-ax.margins(x=0)
-plt.axis('equal')
-plt.show()
+    _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+    ax.margins(x=0)
+    plt.axis('equal')
+    plt.show()
 
-plt.plot(radialProfile)
-plt.show()
+    plt.plot(radialProfile)
+    plt.show()
 
-#
-# _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-# plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma')
-# ax.margins(x=0)
-# plt.axis('equal')
-# plt.show()
-#
-#
-# _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-# # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-# plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
-# ax.margins(x=0)
-# plt.axis('equal')
-# plt.show()
-#
-# plt.plot(radialLogProfile)
-# plt.show()
+    #
+    # _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    # plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma')
+    # ax.margins(x=0)
+    # plt.axis('equal')
+    # plt.show()
+    #
+    #
+    # _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    # plt.imshow(fftLogCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+    # ax.margins(x=0)
+    # plt.axis('equal')
+    # plt.show()
+    #
+    # plt.plot(radialLogProfile)
+    # plt.show()
 
 
