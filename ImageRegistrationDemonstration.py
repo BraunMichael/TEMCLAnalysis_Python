@@ -11,18 +11,6 @@ from skimage import data
 from skimage.registration import phase_cross_correlation
 from scipy.ndimage import fourier_shift
 
-# basedir = os.path.join('/home/mbraun/XRDProcessing/imreg_dft-master/resources/', 'examples')
-# # the TEMPLATE
-# im0 = imageio.imread(os.path.join(basedir, "sample1.png"))
-# # the image to be transformed
-# im1 = imageio.imread(os.path.join(basedir, "sample3.png"))
-# result = ird.similarity(im0, im1, numiter=3)
-#
-# assert "timg" in result
-# # Maybe we don't want to show plots all the time
-# ird.imshow(im0, im1, result['timg'])
-# plt.show()
-
 
 image = data.camera()
 shift = (-22.4, 53.32)
