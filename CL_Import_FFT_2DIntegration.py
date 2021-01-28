@@ -374,7 +374,17 @@ fileNames = []
 for name in rawFileNames:
     if name.endswith(".txt"):
         fileNames.append(os.path.join(dirpath, name))
-for currentFile in fileNames:
+numlist = []
+for name in fileNames:
+    stringtime = re.search(r'\d+', getNakedNameFromFilePath(name)).group()
+    numlist.append(int(stringtime))
+numlist = np.array(numlist)
+fileNames = np.array(fileNames)
+sortedIndices = np.argsort(numlist)
+sortedFileNames = fileNames[sortedIndices]
+sortedNumList = numlist[sortedIndices]
+
+for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
     nakedRawFileName = getNakedNameFromFilePath(currentFile)
     rawCL = np.loadtxt(currentFile)
     assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
@@ -393,6 +403,7 @@ for currentFile in fileNames:
 
 
     fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    fig.canvas.set_window_title(str(currentTime) + ' min')
     # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
     CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]),
                          cmap='plasma', norm=LogNorm())
