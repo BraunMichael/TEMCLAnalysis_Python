@@ -388,7 +388,7 @@ for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
     nakedRawFileName = getNakedNameFromFilePath(currentFile)
     rawCL = np.loadtxt(currentFile)
     assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
-    frameNum = int(len(wavelengths)/2)
+
 
     assert averagedSlices % 2 == 1, "Only odd numbers of averaged wavelengths allowed to simplify calculations/meaning of averaged wavelengths"
     out = np.reshape(rawCL.flatten(), (len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
@@ -401,18 +401,21 @@ for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
         # outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
     outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
 
-
+    integratedArray = np.sum(np.sum(outAveraged, axis=1), axis=1)
+    # initialFrameNum = int(len(wavelengths) / 2)
+    initialFrameNum = np.argmax(integratedArray)  # Choose maximum integrated intensity slice as initial frame
+    print(initialFrameNum)
     fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
     fig.canvas.set_window_title(str(currentTime) + ' min')
     # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-    CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]),
+    CLimage = plt.imshow(outAveraged[initialFrameNum, :, :], interpolation='none', vmin=np.min(outAveraged[initialFrameNum, :, :]), vmax=np.max(outAveraged[initialFrameNum, :, :]),
                          cmap='plasma', norm=LogNorm())
     plt.subplots_adjust(bottom=0.18)
     ax.margins(x=0)
     plt.axis('equal')
     axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
-    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=int(len(wavelengths)/2), valfmt='%0.0f')
-    sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths)/2)]))
+    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=initialFrameNum, valfmt='%0.0f')
+    sSlice.valtext.set_text(int(wavelengths[initialFrameNum]))
 
 
     def update(_):
@@ -491,12 +494,12 @@ for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
 
     fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
     plt.subplots_adjust(bottom=0.18)
-    CLImage = axs[0].imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-    CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
+    CLImage = axs[0].imshow(outAveraged[initialFrameNum, :, :], interpolation='none', vmin=np.min(outAveraged[initialFrameNum, :, :]), vmax=np.max(outAveraged[initialFrameNum, :, :]), cmap='plasma', norm=LogNorm())
+    CLImagePeaks, = axs[0].plot(xPeakCoordsDict[wavelengths[initialFrameNum]] / pixelScale, yPeakCoordsDict[wavelengths[initialFrameNum]] / pixelScale, linestyle="", marker='x')
     axs[0].margins(x=0, y=0)
 
-    CLImageBlurred = axs[1].imshow(outAveragedBlurred[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-    CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, yPeakCoordsBlurredDict[wavelengths[frameNum]]/pixelScale, linestyle="", marker='x')
+    CLImageBlurred = axs[1].imshow(outAveragedBlurred[initialFrameNum, :, :], interpolation='none', vmin=np.min(outAveraged[initialFrameNum, :, :]), vmax=np.max(outAveraged[initialFrameNum, :, :]), cmap='plasma', norm=LogNorm())
+    CLImageBlurredPeaks, = axs[1].plot(xPeakCoordsBlurredDict[wavelengths[initialFrameNum]] / pixelScale, yPeakCoordsBlurredDict[wavelengths[initialFrameNum]] / pixelScale, linestyle="", marker='x')
     manager = plt.get_current_fig_manager()
     manager.window.maximize()
     axs[1].margins(x=0, y=0)
@@ -505,8 +508,8 @@ for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
     axs[0].set_adjustable('box')
     axs[1].set_adjustable('box')
     axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
-    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=int(len(wavelengths) / 2), valfmt='%0.0f')
-    sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths) / 2)]))
+    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths) - 1, valinit=initialFrameNum, valfmt='%0.0f')
+    sSlice.valtext.set_text(int(wavelengths[initialFrameNum]))
 
 
     def update(_):
