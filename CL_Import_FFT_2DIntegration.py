@@ -13,6 +13,8 @@ from matplotlib.widgets import RectangleSelector, Button, Slider, PolygonSelecto
 from matplotlib.colors import LogNorm
 import matplotlib.patches as mpatches
 from matplotlib.ticker import AutoMinorLocator
+from skimage.registration import phase_cross_correlation
+from scipy.ndimage import fourier_shift
 
 from shapely.geometry import Point, LineString, MultiLineString, Polygon
 
@@ -384,27 +386,106 @@ sortedIndices = np.argsort(numlist)
 sortedFileNames = fileNames[sortedIndices]
 sortedNumList = numlist[sortedIndices]
 
-for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
+
+collectedAveragedCL = []
+alignmentFrames = []
+maxFrameIntensityIndices = []
+minimumFrameHeight = np.inf
+minimumFrameWidth = np.inf
+for currentFile in sortedFileNames:
     nakedRawFileName = getNakedNameFromFilePath(currentFile)
     rawCL = np.loadtxt(currentFile)
     assert len(rawCL) % len(wavelengths) == 0, "Your CL data is not an even multiple of your number of wavelengths, you probably need an updated wavelengths file."
-
-
     assert averagedSlices % 2 == 1, "Only odd numbers of averaged wavelengths allowed to simplify calculations/meaning of averaged wavelengths"
     out = np.reshape(rawCL.flatten(), (len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
     outAveraged = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
-    outAveragedBlurred = np.zeros((len(wavelengths), int(rawCL.shape[0]/len(wavelengths)), rawCL.shape[1]))
     for centerSlice in range(len(wavelengths)):
         lowerSlice = max(0, centerSlice - int(((averagedSlices - 1) / 2)))
         upperSlice = min(len(wavelengths)-1, centerSlice + int(((averagedSlices - 1) / 2)))
         outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
         # outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
     outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
-
+    collectedAveragedCL.append(outAveraged)
     integratedArray = np.sum(np.sum(outAveraged, axis=1), axis=1)
     # initialFrameNum = int(len(wavelengths) / 2)
     initialFrameNum = np.argmax(integratedArray)  # Choose maximum integrated intensity slice as initial frame
-    print(initialFrameNum)
+    alignmentFrames.append(outAveraged[initialFrameNum, :, :])
+    maxFrameIntensityIndices.append(initialFrameNum)
+    if setupOptions.doAlignment:
+        frameHeight = outAveraged[initialFrameNum, :, :].shape[0]
+        if frameHeight < minimumFrameHeight:
+            minimumFrameHeight = frameHeight
+        frameWidth = outAveraged[initialFrameNum, :, :].shape[1]
+        if frameWidth < minimumFrameWidth:
+            minimumFrameWidth = frameWidth
+
+if setupOptions.doAlignment:
+    croppedCollectedAveragedCL = []
+    croppedAlignmentFrames = []
+    for outAveraged, alignmentFrame in zip(collectedAveragedCL, alignmentFrames):
+        croppedCollectedAveragedCL.append(outAveraged[:, :minimumFrameHeight, :minimumFrameWidth])
+        croppedAlignmentFrames.append(alignmentFrame[:minimumFrameHeight, :minimumFrameWidth])
+
+    croppedAlignedCollectedAveragedCL = []
+    alignedAlignmentFrames = []
+    for outAveraged, alignmentFrame in zip(croppedCollectedAveragedCL, croppedAlignmentFrames):
+        subshift, _, _ = phase_cross_correlation(croppedAlignmentFrames[0], alignmentFrame, upsample_factor=100)
+
+        subAlignedAlignmentImage = fourier_shift(np.fft.fftn(alignmentFrame), subshift)
+        subAlignedAlignmentImage = np.fft.ifftn(subAlignedAlignmentImage)
+        alignedAlignmentFrames.append(subAlignedAlignmentImage.real)
+
+        alignedOutAveragedArrays = []
+        for wavelengthFrame in outAveraged:
+            subAlignedImage = fourier_shift(np.fft.fftn(wavelengthFrame), subshift)
+            subAlignedImage = np.fft.ifftn(subAlignedImage)
+            alignedOutAveragedArrays.append(subAlignedImage)
+        alignedOutAveraged = np.zeros(outAveraged.shape)
+        for i in range(len(alignedOutAveragedArrays)):
+            alignedOutAveraged[i, :, :] = alignedOutAveragedArrays[i].real
+        croppedAlignedCollectedAveragedCL.append(alignedOutAveraged)
+
+    fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
+    plt.subplots_adjust(bottom=0.18)
+    croppedFrame = croppedAlignmentFrames[0][:, :]
+    croppedFrameAligned = alignedAlignmentFrames[0][:, :]
+
+    CLImage = axs[0].imshow(croppedFrame, interpolation='none', vmin=np.min(croppedFrame), vmax=np.max(croppedFrame), cmap='plasma', norm=LogNorm())
+    axs[0].margins(x=0, y=0)
+
+    CLimageAligned = axs[1].imshow(croppedFrameAligned, interpolation='none', vmin=np.min(croppedFrameAligned), vmax=np.max(croppedFrameAligned), cmap='plasma', norm=LogNorm())
+    manager = plt.get_current_fig_manager()
+    manager.window.maximize()
+    axs[1].margins(x=0, y=0)
+    axs[0].axis('equal')
+    axs[1].axis('equal')
+    axs[0].set_adjustable('box')
+    axs[1].set_adjustable('box')
+    axTime = plt.axes([0.25, 0.1, 0.65, 0.03])
+    sTime = Slider(axTime, 'Wavelength (nm)', 0, len(alignedAlignmentFrames) - 1, valinit=0, valfmt='%0.0f')
+    sTime.valtext.set_text(0)
+
+
+    def update(_):
+        sTime.valtext.set_text(int(sTime.val))
+        croppedFrame = croppedAlignmentFrames[int(sTime.val)][:, :]
+        CLImage.set_data(croppedFrame)
+        CLImage.vmin = np.min(croppedFrame)
+        CLImage.vmax = np.max(croppedFrame)
+
+        croppedFrameAligned = alignedAlignmentFrames[int(sTime.val)][:, :]
+
+        CLimageAligned.set_data(croppedFrameAligned)
+        CLimageAligned.vmin = np.min(croppedFrameAligned)
+        CLimageAligned.vmax = np.max(croppedFrameAligned)
+        fig.canvas.draw_idle()
+
+
+    sTime.on_changed(update)
+    plt.show()
+    plt.close()
+
+for currentTime, outAveraged, initialFrameNum in zip(sortedNumList, croppedAlignedCollectedAveragedCL, maxFrameIntensityIndices):
     fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
     fig.canvas.set_window_title(str(currentTime) + ' min')
     # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
@@ -452,6 +533,7 @@ for currentFile, currentTime in zip(sortedFileNames, sortedNumList):
     #
     #
     outAveraged = outAveraged * imageHandler.imageMask + 1
+    outAveragedBlurred = np.zeros(outAveraged.shape)
 
     for centerSlice in range(len(wavelengths)):
         CLFrame = outAveraged[centerSlice, :, :]
