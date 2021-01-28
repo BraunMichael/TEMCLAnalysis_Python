@@ -517,96 +517,96 @@ for currentFile in fileNames:
     plt.close()
 
 
-    # FFT Work
-    fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-    CLimage = plt.imshow(outAveraged[frameNum, :, :], interpolation='none', vmin=np.min(outAveraged[frameNum, :, :]), vmax=np.max(outAveraged[frameNum, :, :]), cmap='plasma', norm=LogNorm())
-    plt.subplots_adjust(bottom=0.18)
-    ax.margins(x=0)
-    plt.axis('equal')
-    axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
-    sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=int(len(wavelengths)/2), valfmt='%0.0f')
-    sSlice.valtext.set_text(int(wavelengths[int(len(wavelengths)/2)]))
-
-
-    def update(_):
-        sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
-        CLimage.set_data(outAveraged[int(sSlice.val), :, :])
-        CLimage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
-        CLimage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
-        fig.canvas.draw_idle()
-
-
-    sSlice.on_changed(update)
-
-    fftManager = FFTManager(fig, ax)
-    axFFT = plt.axes([0.7, 0.02, 0.2, 0.075])
-    bFFT = Button(axFFT, 'Calc FFT')
-    rect = RectangleSelector(ax, fftManager.RangeSelection, drawtype='box', rectprops=dict(facecolor='none', edgecolor='red', alpha=0.5, fill=False))
-    bFFT.on_clicked(fftManager.FFTButtonClicked)
-
-    plt.show()
-    centerSliceIndex = int(sSlice.val)
-    centerWavelengthValue = wavelengths[centerSliceIndex]
-    coordsOut = fftManager.coords
-    plt.close()
-    xMin = int(round(coordsOut['x'][0]))
-    xMax = int(round(coordsOut['x'][1]))
-    yMin = int(round(coordsOut['y'][0]))
-    yMax = int(round(coordsOut['y'][1]))
-    print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
-    print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
-    if abs((xMax-xMin) - (yMax-yMin)) == 1:
-        print('trying to fix it')
-        if abs(xMax-xMin) > abs(yMax-yMin):
-            print('case 1')
-            if yMin == 0:
-                yMax -= 1
-                print('ymax-1')
-            else:
-                yMin -= 1
-                print('ymin-1')
-
-        else:
-            print('case 2')
-            if xMin == 0:
-                xMax -= 1
-                print('xMax - 1')
-            else:
-                xMin -= 1
-                print('xmin-1')
-
-    print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
-    print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
-    assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
-    croppedCL = outAveraged[centerSliceIndex, yMin:yMax, xMin:xMax]
-
-
-    # TODO: Not sure which to use, try integrating all of them
-
-    fftCroppedCL = abs(np.fft.fftshift(np.fft.fft2(croppedCL)))
-    fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
-
-    centerFFTCoords = np.unravel_index(np.argmax(fftCroppedCL, axis=None), fftCroppedCL.shape)
-    radialProfile = radial_profile(fftCroppedCL, centerFFTCoords)
-    radialLogProfile = radial_profile(fftLogCroppedCL, centerFFTCoords)
-
-    _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-    plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma')
-    ax.margins(x=0)
-    plt.axis('equal')
-    plt.show()
-
-    _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-    # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
-    plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
-    ax.margins(x=0)
-    plt.axis('equal')
-    plt.show()
-
-    plt.plot(radialProfile)
-    plt.show()
+    # # FFT Work
+    # fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    # CLimage = plt.imshow(outAveraged[initialFrameNum, :, :], interpolation='none', vmin=np.min(outAveraged[initialFrameNum, :, :]), vmax=np.max(outAveraged[initialFrameNum, :, :]), cmap='plasma', norm=LogNorm())
+    # plt.subplots_adjust(bottom=0.18)
+    # ax.margins(x=0)
+    # plt.axis('equal')
+    # axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
+    # sSlice = Slider(axSlice, 'Wavelength (nm)', 0, len(wavelengths)-1, valinit=initialFrameNum, valfmt='%0.0f')
+    # sSlice.valtext.set_text(int(wavelengths[initialFrameNum]))
+    #
+    #
+    # def update(_):
+    #     sSlice.valtext.set_text(int(wavelengths[int(sSlice.val)]))
+    #     CLimage.set_data(outAveraged[int(sSlice.val), :, :])
+    #     CLimage.vmin = np.min(outAveraged[int(sSlice.val), :, :])
+    #     CLimage.vmax = np.max(outAveraged[int(sSlice.val), :, :])
+    #     fig.canvas.draw_idle()
+    #
+    #
+    # sSlice.on_changed(update)
+    #
+    # fftManager = FFTManager(fig, ax)
+    # axFFT = plt.axes([0.7, 0.02, 0.2, 0.075])
+    # bFFT = Button(axFFT, 'Calc FFT')
+    # rect = RectangleSelector(ax, fftManager.RangeSelection, drawtype='box', rectprops=dict(facecolor='none', edgecolor='red', alpha=0.5, fill=False))
+    # bFFT.on_clicked(fftManager.FFTButtonClicked)
+    #
+    # plt.show()
+    # centerSliceIndex = int(sSlice.val)
+    # centerWavelengthValue = wavelengths[centerSliceIndex]
+    # coordsOut = fftManager.coords
+    # plt.close()
+    # xMin = int(round(coordsOut['x'][0]))
+    # xMax = int(round(coordsOut['x'][1]))
+    # yMin = int(round(coordsOut['y'][0]))
+    # yMax = int(round(coordsOut['y'][1]))
+    # print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
+    # print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
+    # if abs((xMax-xMin) - (yMax-yMin)) == 1:
+    #     print('trying to fix it')
+    #     if abs(xMax-xMin) > abs(yMax-yMin):
+    #         print('case 1')
+    #         if yMin == 0:
+    #             yMax -= 1
+    #             print('ymax-1')
+    #         else:
+    #             yMin -= 1
+    #             print('ymin-1')
+    #
+    #     else:
+    #         print('case 2')
+    #         if xMin == 0:
+    #             xMax -= 1
+    #             print('xMax - 1')
+    #         else:
+    #             xMin -= 1
+    #             print('xmin-1')
+    #
+    # print("xmin xmax ymin ymax", xMin, xMax, yMin, yMax)
+    # print("xMax-xMin", xMax-xMin, "yMax-yMin", yMax-yMin)
+    # assert xMax-xMin == yMax-yMin, "The selected FFT area does not appear to be square, make sure to hold shift when selecting the area of interest"
+    # croppedCL = outAveraged[centerSliceIndex, yMin:yMax, xMin:xMax]
+    #
+    #
+    # # TODO: Not sure which to use, try integrating all of them
+    #
+    # fftCroppedCL = abs(np.fft.fftshift(np.fft.fft2(croppedCL)))
+    # fftLogCroppedCL = abs(np.fft.fftshift(np.fft.fft2(np.log10(croppedCL))))
+    #
+    # centerFFTCoords = np.unravel_index(np.argmax(fftCroppedCL, axis=None), fftCroppedCL.shape)
+    # radialProfile = radial_profile(fftCroppedCL, centerFFTCoords)
+    # radialLogProfile = radial_profile(fftLogCroppedCL, centerFFTCoords)
+    #
+    # _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    # plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma')
+    # ax.margins(x=0)
+    # plt.axis('equal')
+    # plt.show()
+    #
+    # _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+    # # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+    # plt.imshow(fftCroppedCL, interpolation='none', cmap='plasma', norm=LogNorm())
+    # ax.margins(x=0)
+    # plt.axis('equal')
+    # plt.show()
+    #
+    # plt.plot(radialProfile)
+    # plt.show()
 
     #
     # _, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
