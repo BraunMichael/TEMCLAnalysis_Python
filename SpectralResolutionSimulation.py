@@ -197,7 +197,7 @@ def SimulatedSpectraPlotting(spectrumData: SpectrumData, virtualSlit: VirtualSli
     simulated, = ax.plot(spectrumData.interpolatedXVals, simulatedSpectraData, 'b', label="Simulated")
     plt.legend(loc='best')
     # plotSetup(fig, ax, spectrumData.nakedFileName, 'SimulatedResolution', plotXLabel='Energy (eV)', plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=True)
-    plotSetup(fig, ax, spectrumData.nakedFileName, 'SimulatedResolution', plotXLabel='Energy (eV)',
+    plotSetup(fig, ax, spectrumData.nakedFileName, 'SimulatedResolution', plotXLabel='Wavelength (nm)',
               plotYLabel=yLabel, setupOptions=setupOptions, withTopAxis=False)
 
     axWidth = plt.axes([0.25, 0.05, 0.65, 0.03])
