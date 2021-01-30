@@ -403,11 +403,9 @@ for currentFile in sortedFileNames:
         lowerSlice = max(0, centerSlice - int(((averagedSlices - 1) / 2)))
         upperSlice = min(len(wavelengths)-1, centerSlice + int(((averagedSlices - 1) / 2)))
         outAveraged[centerSlice, :, :] = np.mean(out[lowerSlice:upperSlice+1, :, :], 0)
-        # outAveragedBlurred[centerSlice, :, :] = gaussian_filter(outAveraged[centerSlice, :, :], sigma=gaussianSigma, truncate=truncateWindow)
     outAveraged = outAveraged + abs(np.min(outAveraged)) + 0.001
     collectedAveragedCL.append(outAveraged)
     integratedArray = np.sum(np.sum(outAveraged, axis=1), axis=1)
-    # initialFrameNum = int(len(wavelengths) / 2)
     initialFrameNum = np.argmax(integratedArray)  # Choose maximum integrated intensity slice as initial frame
     alignmentFrames.append(outAveraged[initialFrameNum, :, :])
     maxFrameIntensityIndices.append(initialFrameNum)
@@ -428,39 +426,56 @@ if setupOptions.doAlignment:
 
     croppedAlignedCollectedAveragedCL = []
     alignedAlignmentFrames = []
+    previousFrame = croppedAlignmentFrames[0]
     for outAveraged, alignmentFrame in zip(croppedCollectedAveragedCL, croppedAlignmentFrames):
-        subshift, _, _ = phase_cross_correlation(croppedAlignmentFrames[0], alignmentFrame, upsample_factor=100)
+        # pixelShift, _, _ = phase_cross_correlation(previousFrame, alignmentFrame, upsample_factor=1000)
+        pixelShift, _, _ = phase_cross_correlation(previousFrame, alignmentFrame)
+        print("Detected shift of:" + str(pixelShift) + " pixels")
+        # TODO: Find new minimum width and height based on width and shift
+        # TODO: Shift ORIGINAL images by shift amount, then do minimum width and height crops
 
-        subAlignedAlignmentImage = fourier_shift(np.fft.fftn(alignmentFrame), subshift)
+        subAlignedAlignmentImage = fourier_shift(np.fft.fftn(alignmentFrame), pixelShift)
         subAlignedAlignmentImage = np.fft.ifftn(subAlignedAlignmentImage)
-        alignedAlignmentFrames.append(subAlignedAlignmentImage.real)
+        previousFrame = np.abs(np.abs(subAlignedAlignmentImage))
+        alignedAlignmentFrames.append(previousFrame)
 
-        alignedOutAveragedArrays = []
-        for wavelengthFrame in outAveraged:
-            subAlignedImage = fourier_shift(np.fft.fftn(wavelengthFrame), subshift)
-            subAlignedImage = np.fft.ifftn(subAlignedImage)
-            alignedOutAveragedArrays.append(subAlignedImage)
         alignedOutAveraged = np.zeros(outAveraged.shape)
-        for i in range(len(alignedOutAveragedArrays)):
-            alignedOutAveraged[i, :, :] = alignedOutAveragedArrays[i].real
+        for wavelengthIndex, wavelengthFrame in enumerate(outAveraged):
+            subAlignedImage = fourier_shift(np.fft.fftn(wavelengthFrame), pixelShift)
+            subAlignedImage = np.fft.ifftn(subAlignedImage)
+            alignedOutAveraged[wavelengthIndex, :, :] = np.abs(np.abs(subAlignedImage))
+
         croppedAlignedCollectedAveragedCL.append(alignedOutAveraged)
 
-    fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
+    fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=3, sharex='all', sharey='all')
     plt.subplots_adjust(bottom=0.18)
-    croppedFrame = croppedAlignmentFrames[0][:, :]
-    croppedFrameAligned = alignedAlignmentFrames[0][:, :]
+    baseCroppedFrame = croppedAlignmentFrames[0][:, :].real
+    croppedFrame = croppedAlignmentFrames[0][:, :].real
+    croppedFrameAligned = alignedAlignmentFrames[0][:, :].real
 
     CLImage = axs[0].imshow(croppedFrame, interpolation='none', vmin=np.min(croppedFrame), vmax=np.max(croppedFrame), cmap='plasma', norm=LogNorm())
     axs[0].margins(x=0, y=0)
 
     CLimageAligned = axs[1].imshow(croppedFrameAligned, interpolation='none', vmin=np.min(croppedFrameAligned), vmax=np.max(croppedFrameAligned), cmap='plasma', norm=LogNorm())
+
+    # Show the output of a cross-correlation to show what the algorithm is
+    # doing behind the scenes
+    image_product = np.fft.fft2(baseCroppedFrame) * np.fft.fft2(croppedFrame).conj()
+    cc_image = np.fft.fftshift(np.fft.ifft2(image_product))
+    cc_image = cc_image.real/np.max(cc_image)
+    crossCorrelationImage = axs[2].imshow(cc_image.real, interpolation='none', vmin=np.min(cc_image.real), vmax=np.max(cc_image.real), cmap='plasma', norm=LogNorm())
+    axs[2].set_title("Cross-correlation")
+
     manager = plt.get_current_fig_manager()
     manager.window.maximize()
     axs[1].margins(x=0, y=0)
+    axs[2].margins(x=0, y=0)
     axs[0].axis('equal')
     axs[1].axis('equal')
+    axs[2].axis('equal')
     axs[0].set_adjustable('box')
     axs[1].set_adjustable('box')
+    axs[2].set_adjustable('box')
     axTime = plt.axes([0.25, 0.1, 0.65, 0.03])
     sTime = Slider(axTime, 'Wavelength (nm)', 0, len(alignedAlignmentFrames) - 1, valinit=0, valfmt='%0.0f')
     sTime.valtext.set_text(0)
@@ -468,7 +483,7 @@ if setupOptions.doAlignment:
 
     def update(_):
         sTime.valtext.set_text(int(sTime.val))
-        croppedFrame = croppedAlignmentFrames[int(sTime.val)][:, :]
+        croppedFrame = croppedAlignmentFrames[int(sTime.val)][:, :].real
         CLImage.set_data(croppedFrame)
         CLImage.vmin = np.min(croppedFrame)
         CLImage.vmax = np.max(croppedFrame)
@@ -478,6 +493,14 @@ if setupOptions.doAlignment:
         CLimageAligned.set_data(croppedFrameAligned)
         CLimageAligned.vmin = np.min(croppedFrameAligned)
         CLimageAligned.vmax = np.max(croppedFrameAligned)
+
+        image_product = np.fft.fft2(baseCroppedFrame) * np.fft.fft2(croppedFrame).conj()
+        cc_image = np.fft.fftshift(np.fft.ifft2(image_product))
+        cc_image = cc_image.real / np.max(cc_image)
+        crossCorrelationImage.set_data(cc_image.real)
+        crossCorrelationImage.vmin = np.min(cc_image.real)
+        crossCorrelationImage.vmax = np.max(cc_image.real)
+
         fig.canvas.draw_idle()
 
 
