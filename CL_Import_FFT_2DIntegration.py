@@ -418,40 +418,57 @@ for currentFile in sortedFileNames:
             minimumFrameWidth = frameWidth
 
 if setupOptions.doAlignment:
-    croppedCollectedAveragedCL = []
+
     croppedAlignmentFrames = []
-    for outAveraged, alignmentFrame in zip(collectedAveragedCL, alignmentFrames):
-        croppedCollectedAveragedCL.append(outAveraged[:, :minimumFrameHeight, :minimumFrameWidth])
+    for alignmentFrame in alignmentFrames:
         croppedAlignmentFrames.append(alignmentFrame[:minimumFrameHeight, :minimumFrameWidth])
 
-    croppedAlignedCollectedAveragedCL = []
     alignedAlignmentFrames = []
     previousFrame = croppedAlignmentFrames[0]
-    for outAveraged, alignmentFrame in zip(croppedCollectedAveragedCL, croppedAlignmentFrames):
+    pixelShifts = []
+    for alignmentFrame in croppedAlignmentFrames:
         # pixelShift, _, _ = phase_cross_correlation(previousFrame, alignmentFrame, upsample_factor=1000)
         pixelShift, _, _ = phase_cross_correlation(previousFrame, alignmentFrame)
+        pixelShifts.append(pixelShift)
         print("Detected shift of:" + str(pixelShift) + " pixels")
-        # TODO: Find new minimum width and height based on width and shift
-        # TODO: Shift ORIGINAL images by shift amount, then do minimum width and height crops
 
         subAlignedAlignmentImage = fourier_shift(np.fft.fftn(alignmentFrame), pixelShift)
         subAlignedAlignmentImage = np.fft.ifftn(subAlignedAlignmentImage)
         previousFrame = np.abs(np.abs(subAlignedAlignmentImage))
         alignedAlignmentFrames.append(previousFrame)
 
-        alignedOutAveraged = np.zeros(outAveraged.shape)
-        for wavelengthIndex, wavelengthFrame in enumerate(outAveraged):
+    minimumAlignedFrameHeight = np.inf
+    minimumAlignedFrameWidth = np.inf
+    for alignmentFrame, pixelShift in zip(alignmentFrames, pixelShifts):
+        effectiveFrameHeight = int(alignmentFrame.shape[0] - np.abs(pixelShift[0]))
+        if effectiveFrameHeight < minimumAlignedFrameHeight:
+            minimumAlignedFrameHeight = effectiveFrameHeight
+        effectiveFrameWidth = int(alignmentFrame.shape[1] - np.abs(pixelShift[1]))
+        if effectiveFrameWidth < minimumAlignedFrameWidth:
+            minimumAlignedFrameWidth = effectiveFrameWidth
+
+    croppedAlignmentFrames = []
+    for alignmentFrame in alignmentFrames:
+        croppedAlignmentFrames.append(alignmentFrame[:minimumAlignedFrameHeight, :minimumAlignedFrameWidth])
+
+    croppedAlignedCollectedAveragedCL = []
+    croppedAlignedAlignmentFrames = []
+    for alignmentFrame, CLFrame, pixelShift in zip(alignmentFrames, collectedAveragedCL, pixelShifts):
+        alignedOutAveraged = np.zeros(CLFrame.shape)
+        for wavelengthIndex, wavelengthFrame in enumerate(CLFrame):
             subAlignedImage = fourier_shift(np.fft.fftn(wavelengthFrame), pixelShift)
             subAlignedImage = np.fft.ifftn(subAlignedImage)
             alignedOutAveraged[wavelengthIndex, :, :] = np.abs(np.abs(subAlignedImage))
-
-        croppedAlignedCollectedAveragedCL.append(alignedOutAveraged)
+        croppedAlignedCollectedAveragedCL.append(alignedOutAveraged[:, :minimumAlignedFrameHeight, :minimumAlignedFrameWidth])
+        subAlignedAlignmentImage = fourier_shift(np.fft.fftn(alignmentFrame), pixelShift)
+        subAlignedAlignmentImage = np.abs(np.abs(np.fft.ifftn(subAlignedAlignmentImage)))
+        croppedAlignedAlignmentFrames.append(subAlignedAlignmentImage[:minimumAlignedFrameHeight, :minimumAlignedFrameWidth])
 
     fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=3, sharex='all', sharey='all')
     plt.subplots_adjust(bottom=0.18)
     baseCroppedFrame = croppedAlignmentFrames[0][:, :].real
     croppedFrame = croppedAlignmentFrames[0][:, :].real
-    croppedFrameAligned = alignedAlignmentFrames[0][:, :].real
+    croppedFrameAligned = croppedAlignedAlignmentFrames[0][:, :].real
 
     CLImage = axs[0].imshow(croppedFrame, interpolation='none', vmin=np.min(croppedFrame), vmax=np.max(croppedFrame), cmap='plasma', norm=LogNorm())
     axs[0].margins(x=0, y=0)
@@ -488,7 +505,7 @@ if setupOptions.doAlignment:
         CLImage.vmin = np.min(croppedFrame)
         CLImage.vmax = np.max(croppedFrame)
 
-        croppedFrameAligned = alignedAlignmentFrames[int(sTime.val)][:, :]
+        croppedFrameAligned = croppedAlignedAlignmentFrames[int(sTime.val)][:, :]
 
         CLimageAligned.set_data(croppedFrameAligned)
         CLimageAligned.vmin = np.min(croppedFrameAligned)
