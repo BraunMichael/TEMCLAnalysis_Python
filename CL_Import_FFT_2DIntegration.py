@@ -61,6 +61,7 @@ class SetupOptions:
     def __init__(self):
         self.dataFilePath = ''
         self.doAlignment = False
+        self.doSelectedAreaAlignment = False
 
 
 def getNakedNameFromFilePath(name):
@@ -106,9 +107,10 @@ def get_setupOptions():
     return setupOptions
 
 
-def on_closing(win, setupOptions, dataFileEntryText, doAlignment):
+def on_closing(win, setupOptions, dataFileEntryText, doAlignment, doSelectedAreaAlignment):
     setupOptions.dataFilePath = dataFileEntryText.get().replace('~', os.path.expanduser('~'))
     setupOptions.doAlignment = doAlignment.get()
+    setupOptions.doSelectedAreaAlignment = doSelectedAreaAlignment.get()
     with open('SetupOptionsJSON_CLanalysis.txt', 'w') as outfile:
         json.dump(jsonpickle.encode(setupOptions), outfile)
     win.destroy()
@@ -118,6 +120,7 @@ def uiInput(win, setupOptions):
     win.title("Spectrum Data Processing Setup UI")
     dataFileEntryText = tkinter.StringVar(value=setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~'))
     doAlignment = tkinter.BooleanVar(value=setupOptions.doAlignment)
+    doSelectedAreaAlignment = tkinter.BooleanVar(value=setupOptions.doSelectedAreaAlignment)
 
     tkinter.Label(win, text="Data File:").grid(row=0, column=0)
     dataFileEntry = tkinter.Entry(win, textvariable=dataFileEntryText)
@@ -134,7 +137,14 @@ def uiInput(win, setupOptions):
     r1doAlignment.grid(row=2, column=1)
     r2doAlignment.grid(row=2, column=2)
 
-    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, doAlignment))
+    item_Label = tkinter.Label(win, text="Perform Selected Area Alignment?", name='doSelectedAreaAlignment_Label')
+    item_Label.grid(row=3, column=0)
+    r1doSelectedAreaAlignment = tkinter.Radiobutton(win, text="Yes", variable=doSelectedAreaAlignment, value=1, name='doSelectedAreaAlignment_YesButton')
+    r2doSelectedAreaAlignment = tkinter.Radiobutton(win, text="No", variable=doSelectedAreaAlignment, value=0, name='doSelectedAreaAlignment_NoButton')
+    r1doSelectedAreaAlignment.grid(row=3, column=1)
+    r2doSelectedAreaAlignment.grid(row=3, column=2)
+
+    win.protocol("WM_DELETE_WINDOW", lambda: on_closing(win, setupOptions, dataFileEntryText, doAlignment, doSelectedAreaAlignment))
     win.mainloop()
 
 
@@ -423,6 +433,62 @@ if setupOptions.doAlignment:
     for alignmentFrame in alignmentFrames:
         croppedAlignmentFrames.append(alignmentFrame[:minimumFrameHeight, :minimumFrameWidth])
 
+    if setupOptions.doSelectedAreaAlignment:
+
+        baseCroppedFrame = croppedAlignmentFrames[0][:, :].real
+        fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
+        # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
+        CLImage = plt.imshow(baseCroppedFrame, interpolation='none', vmin=np.min(baseCroppedFrame), vmax=np.max(baseCroppedFrame), cmap='plasma', norm=LogNorm())
+        plt.subplots_adjust(bottom=0.18)
+        ax.margins(x=0)
+        plt.axis('equal')
+        axSlice = plt.axes([0.25, 0.1, 0.65, 0.03])
+        sSlice = Slider(axSlice, 'Time Slice', 0, len(alignmentFrames)-1, valinit=0, valfmt='%0.0f')
+        sSlice.valtext.set_text(0)
+
+
+        def update(_):
+            sSlice.valtext.set_text(int(sSlice.val))
+            croppedFrame = croppedAlignmentFrames[int(sSlice.val)][:, :].real
+            CLImage.set_data(croppedFrame)
+            CLImage.vmin = np.min(croppedFrame)
+            CLImage.vmax = np.max(croppedFrame)
+            fig.canvas.draw_idle()
+
+        sSlice.on_changed(update)
+
+        fftManager = FFTManager(fig, ax)
+        axFFT = plt.axes([0.7, 0.02, 0.2, 0.075])
+        bFFT = Button(axFFT, 'Correct Drift')
+        rect = RectangleSelector(ax, fftManager.RangeSelection, drawtype='box', rectprops=dict(facecolor='none', edgecolor='red', alpha=0.5, fill=False))
+        bFFT.on_clicked(fftManager.FFTButtonClicked)
+
+        plt.show()
+
+        coordsOut = fftManager.coords
+        plt.close()
+
+        xMin = int(round(coordsOut['x'][0]))
+        xMax = int(round(coordsOut['x'][1]))
+        yMin = int(round(coordsOut['y'][0]))
+        yMax = int(round(coordsOut['y'][1]))
+
+        if abs((xMax-xMin) - (yMax-yMin)) == 1:
+            if abs(xMax-xMin) > abs(yMax-yMin):
+                if yMin == 0:
+                    yMax -= 1
+                else:
+                    yMin -= 1
+            else:
+                if xMin == 0:
+                    xMax -= 1
+                else:
+                    xMin -= 1
+        assert xMax-xMin == yMax-yMin, "The selected area does not appear to be square, make sure to hold shift when selecting the area of interest"
+
+        for index, alignmentFrame in enumerate(croppedAlignmentFrames):
+            croppedAlignmentFrames[index] = alignmentFrame[yMin:yMax, xMin:xMax]
+
     alignedAlignmentFrames = []
     previousFrame = croppedAlignmentFrames[0]
     pixelShifts = []
@@ -494,7 +560,7 @@ if setupOptions.doAlignment:
     axs[1].set_adjustable('box')
     axs[2].set_adjustable('box')
     axTime = plt.axes([0.25, 0.1, 0.65, 0.03])
-    sTime = Slider(axTime, 'Wavelength (nm)', 0, len(alignedAlignmentFrames) - 1, valinit=0, valfmt='%0.0f')
+    sTime = Slider(axTime, 'Time Slice', 0, len(alignedAlignmentFrames) - 1, valinit=0, valfmt='%0.0f')
     sTime.valtext.set_text(0)
 
 
