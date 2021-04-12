@@ -608,14 +608,22 @@ for currentTime, outAveraged, initialFrameNum in zip(sortedNumList, collectedAve
 
         # This is non blurred only right now
         firstNNDict[wavelength] = []
+        firstNNBlurredDict[wavelength] = []
         for peak in NNDict[wavelength]:
             firstNNDict[wavelength].append(peak[0])
+        for peak in NNBlurredDict[wavelength]:
+            firstNNBlurredDict[wavelength].append(peak[0])
 
 
     # Only does non-blurred right now
     if saveFigures:
+        if not os.path.isdir('OutputFolder'):
+            os.mkdir('OutputFolder')
+        with tqdm_joblib(tqdm(desc="Saving Blurred Nearest Neighbor Graphs", total=len(wavelengths))) as progress_bar:
+            joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNBlurredDict, pdfXValues, wavelength, currentTimeString, "GaussianFiltered") for wavelength in wavelengths)
+
         with tqdm_joblib(tqdm(desc="Saving Nearest Neighbor Graphs", total=len(wavelengths))) as progress_bar:
-            joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNDict, pdfXValues, wavelength) for wavelength in wavelengths)
+            joblib.Parallel(n_jobs=num_cores)(joblib.delayed(saveNNGraph)(firstNNDict, pdfXValues, wavelength, currentTimeString, "Unfiltered") for wavelength in wavelengths)
 
     fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=2, sharex='all', sharey='all')
     plt.subplots_adjust(bottom=0.18)
