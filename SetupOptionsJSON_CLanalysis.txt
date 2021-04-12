@@ -1,0 +1,1 @@
+"{\"py/object\": \"__main__.SetupOptions\", \"dataFilePath\": \"/home/mbraun/TEMCLAnalysis_Python/CLSample2\", \"doAlignment\": false}"
