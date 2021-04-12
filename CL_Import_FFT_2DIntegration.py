@@ -35,7 +35,7 @@ num_cores = multiprocessing.cpu_count()
 
 
 # User adjustable parameters
-saveFigures = False
+saveFigures = True
 pixelScale = 49  # nm per pixel
 backgroundPercentagePoint = 0.2  # the value that is higher than x percent of all valid points in the ROI
 requiredBackgroundProminence = 7  # Required peak height as multiple of backgroundPercentagePoint to be a valid peak or number of standard deviations above background average
