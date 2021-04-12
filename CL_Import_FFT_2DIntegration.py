@@ -308,9 +308,10 @@ def getNearestNeighborDistances(xPeakCoords, yPeakCoords):
     return NNdistances
 
 
-def saveNNGraph(firstNNDict, pdfXValues, wavelength):
-    shape, loc, scale = lognorm.fit(firstNNDict[wavelength], loc=0)
-    pdfYValues = lognorm.pdf(pdfXValues, shape, loc=loc, scale=scale)
+def saveNNGraph(firstNNDict, pdfXValues, wavelength, timeString, suffix):
+    if len(firstNNDict[wavelength]) > 3:
+        shape, loc, scale = lognorm.fit(firstNNDict[wavelength], floc=0, scale=170)
+        pdfYValues = lognorm.pdf(pdfXValues, shape, loc=loc, scale=scale)
 
         fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1, dpi=300)
         plt.plot(firstNNDict[wavelength], np.zeros(len(firstNNDict[wavelength])), 'k|', markersize=30)
