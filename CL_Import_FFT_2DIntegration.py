@@ -463,7 +463,7 @@ if setupOptions.doAlignment:
         subAlignedAlignmentImage = fourier_shift(np.fft.fftn(alignmentFrame), pixelShift)
         subAlignedAlignmentImage = np.abs(np.abs(np.fft.ifftn(subAlignedAlignmentImage)))
         croppedAlignedAlignmentFrames.append(subAlignedAlignmentImage[:minimumAlignedFrameHeight, :minimumAlignedFrameWidth])
-
+    collectedAveragedCL = croppedAlignedCollectedAveragedCL.copy()  #make compatible with not doing image alignment
     fig, axs = plt.subplots(figsize=(8, 8), nrows=1, ncols=3, sharex='all', sharey='all')
     plt.subplots_adjust(bottom=0.18)
     baseCroppedFrame = croppedAlignmentFrames[0][:, :].real
@@ -525,9 +525,12 @@ if setupOptions.doAlignment:
     plt.show()
     plt.close()
 
-for currentTime, outAveraged, initialFrameNum in zip(sortedNumList, croppedAlignedCollectedAveragedCL, maxFrameIntensityIndices):
+
+for currentTime, outAveraged, initialFrameNum in zip(sortedNumList, collectedAveragedCL, maxFrameIntensityIndices):
+
+    currentTimeString = str(currentTime) + 'min'
     fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1)
-    fig.canvas.set_window_title(str(currentTime) + ' min')
+    fig.canvas.set_window_title(currentTimeString)
     # TODO: use pcolormesh instead to set scaled axes https://stackoverflow.com/questions/34003120/matplotlib-personalize-imshow-axis
     CLimage = plt.imshow(outAveraged[initialFrameNum, :, :], interpolation='none', vmin=np.min(outAveraged[initialFrameNum, :, :]), vmax=np.max(outAveraged[initialFrameNum, :, :]),
                          cmap='plasma', norm=LogNorm())
