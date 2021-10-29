@@ -240,8 +240,8 @@ def isPeak(CLFrame, rowNum, colNum):
 def simplePeaks(CLFrame):
     xCoords = []
     yCoords = []
-    for rowNum in range(np.shape(CLFrame)[0]):
-        for colNum in range(np.shape(CLFrame)[1]):
+    for rowNum in range(np.shape(CLFrame)[0] - 1):
+        for colNum in range(np.shape(CLFrame)[1] - 1):
             if CLFrame[rowNum, colNum] > 1:
                 if rowNum > 0 and colNum > 0:
                     if checkValidNeighbors(CLFrame, rowNum, colNum):
