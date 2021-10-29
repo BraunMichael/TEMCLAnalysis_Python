@@ -80,7 +80,7 @@ def uiInput(win, setupOptions, savedJSONFileName):
     tkinter.Label(win, text="Image File:").grid(row=0, column=0)
     ImageFileEntry = tkinter.Entry(win, textvariable=ImageEntryText, width=len(setupOptions.dataFilePath.replace(os.path.expanduser('~'), '~')))
     ImageFileEntry.grid(row=1, column=0)
-    tkinter.Button(win, text='Choose File', command=lambda: get_file(ImageFileEntry, ImageEntryText, 'Choose Image File', '.jpg .jpeg .png .tiff .tif')).grid(row=1, column=1)
+    tkinter.Button(win, text='Choose File', command=lambda: get_file(ImageFileEntry, ImageEntryText, 'Choose Image File', '.tiff .tif')).grid(row=1, column=1)
     tkinter.Button(win, text='Preview', command=lambda: preview_image(ImageEntryText)).grid(row=1, column=2)
 
     txtValidator = TextValidator(win, minimumScaleBarWidthMicronsValue=0, maximumScaleBarWidthMicronsValue=1000)
