@@ -34,7 +34,6 @@ import multiprocessing
 from tqdm import tqdm
 num_cores = multiprocessing.cpu_count()
 
-scaleBarMicronsPerPixel = 0.001953125  #For 512 image with no borders
 
 # User adjustable parameters
 saveFigures = True
@@ -252,6 +251,7 @@ def findPeaks(AFMFrame, pixelSize, backgroundPercentagePoint, requiredBackground
     backgroundAverage = np.mean(backgroundPoints)
     backgroundStdDev = np.std(backgroundPoints)
     minimumValidYValue = requiredBackgroundProminence * backgroundStdDev + backgroundAverage
+    print('minimumValidYValue = ' + str(minimumValidYValue))
     # print('Avg = ' + str(backgroundAverage) + ' StdDev = ' + str(backgroundStdDev) + 'MinimumYValue = ' + str(minimumValidYValue))
     # minimumValidYValue = 10
 
@@ -277,7 +277,7 @@ def saveNNGraph(firstNearestNeighborsList, pdfXValues, suffix):
     if len(firstNearestNeighborsList) > 3:
         shape, loc, scale = lognorm.fit(firstNearestNeighborsList, floc=0, scale=170)
         pdfYValues = lognorm.pdf(pdfXValues, shape, loc=loc, scale=scale)
-
+        print('Max probability at ' + str(pdfXValues[np.argmax(pdfYValues)]) + ' nm')
         fig, ax = plt.subplots(figsize=(8, 8), nrows=1, ncols=1, dpi=300)
         plt.plot(firstNearestNeighborsList, np.zeros(len(firstNearestNeighborsList)), 'k|', markersize=30)
         plt.plot(pdfXValues, pdfYValues, 'k-')
@@ -332,45 +332,22 @@ class FFTManager:
 
 
 setupOptions = setupOptionsUI()
-inputFileNames = setupOptions.dataFilePath
+imagePath = setupOptions.dataFilePath
+rawImage = Image.open(imagePath)
+AFMSourceImage = np.array(rawImage)
 
-if isinstance(inputFileNames, str):
-    inputFileNames = [inputFileNames]
-fileNames = []
-for inputFileName in inputFileNames:
-    if inputFileName.endswith(('jpg', '.jpeg')):
-        fileNames.append(inputFileName)
+nakedRawFileName = getNakedNameFromFilePath(imagePath)
+rawImage.close()
+rawBlurred = np.zeros(AFMSourceImage.shape)
 
-    if inputFileName.endswith(('.tiff', '.tif')):
-        print("attempting to convert tiff to png")
-        imagePath = inputFileName
+AFMBlurredImage = gaussian_filter(AFMSourceImage, sigma=gaussianSigma, truncate=truncateWindow)
 
-        fileTypeEnding = imagePath[imagePath.rfind('.'):]
-        pngPath = inputFileName.replace(fileTypeEnding, '.png')
-        # pngPath = os.path.join(dirpath, pngName)
-        rawImage = Image.open(imagePath)
-        npImage = ((np.array(rawImage) + 1) / 256) - 1
-        visImage = Image.fromarray(np.uint8(npImage), mode='L')
-        visImage.save(pngPath, 'PNG')
-        fileNames.append(pngPath)
-        # os.remove(imagePath)
-
-
-for inputFileName in fileNames:
-    rawImage = Image.open(inputFileName)
-    AFMSourceImage = np.array(rawImage)
-    nakedRawFileName = getNakedNameFromFilePath(inputFileName)
-    rawImage.close()
-    rawBlurred = np.zeros(AFMSourceImage.shape)
-
-    AFMBlurredImage = gaussian_filter(AFMSourceImage, sigma=gaussianSigma, truncate=truncateWindow)
-
-    AFMSourceImage = np.where(AFMSourceImage == 0, AFMSourceImage + 1, AFMSourceImage)
-    AFMBlurredImage = np.where(AFMBlurredImage == 0, AFMBlurredImage + 1, AFMBlurredImage)
+AFMSourceImage = np.where(AFMSourceImage == 0, AFMSourceImage + 1, AFMSourceImage)
+AFMBlurredImage = np.where(AFMBlurredImage == 0, AFMBlurredImage + 1, AFMBlurredImage)
 pixelScale = 1000 * setupOptions.scaleBarWidthMicrons / AFMSourceImage.shape[0]  # nm per pixel
 
 # Peak Finding
-pdfXValues = list(range(0, 101))
+pdfXValues = np.linspace(0, 50, num=1001)
 xPeakCoords, yPeakCoords = findPeaks(AFMSourceImage, pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
 xPeakCoordsBlurred, yPeakCoordsBlurred = findPeaks(AFMBlurredImage, pixelScale, backgroundPercentagePoint, requiredBackgroundProminence)
 
